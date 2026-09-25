@@ -13,9 +13,18 @@ npm start
 npm test
 npm run test:desktop
 npm run package
+npm run release
 ```
 
 `npm run package` 输出到 `dist/<时间戳>/MdView-win32-x64/`。双击其中的 `MdView.exe`，须保留同目录的资源与 DLL；整目录可复制到另一台 Windows x64 电脑，无需安装 Node.js。不需要管理员权限，不修改默认文件关联。
+
+`npm run release` 同时生成 `MdView-0.1.0-Setup-x64.exe` 一键安装版和 `MdView-0.1.0-Portable-x64.exe` 单文件便携版，以及 `SHA256SUMS.txt` 校验文件。安装版安装到当前用户目录，创建桌面与开始菜单快捷方式，可在 Windows「已安装的应用」中卸载；安装或卸载遇到正在运行的已安装版本会退出，要求先保存并关闭，不强制终止编辑器。卸载保留偏好设置和用户文档。
+
+便携版无须安装，首次启动会临时解压运行文件，偏好设置保存在 EXE 旁的 `MdView-data` 中；请放在可写目录，迁移时连同该文件夹一起复制。两种版本均无需联网下载安装组件。当前产物未配置数字签名，Windows 可能提示未知发布者。
+
+`npm run test:release -- dist/<时间戳>` 验证首次安装、已安装程序、便携启动和设置目录，并检查安装器不会结束正在运行的编辑器。此测试会安装当前用户版本并保留启动的正常窗口；发现已有安装时停止，避免覆盖用户版本。截图和报告保存在 `artifacts/release-*/`，便携测试使用独立副本。
+
+若安装已完成、只需续跑验证，追加 `--installed`；脚本先校验已安装 `app.asar` 与该发行目录一致，不会重新安装。卸载登记的 `DisplayName` 包含版本号，路径从 `DisplayIcon` 读取，不能依赖空的 `InstallLocation`。下次发行检查首次安装与续跑模式是否均一次通过。
 
 命令行也可打开文件：`MdView.exe "D:\文档\示例.md"`，或将文件拖到程序窗口 / EXE 上。打包后可运行 `MdView.exe --smoke-test` 验证实际产物；测试使用独立临时偏好目录，截图与报告写入当前目录的 `artifacts/`。
 

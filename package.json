@@ -14,7 +14,10 @@
     "build": "node scripts/build.cjs",
     "prestart": "npm run build",
     "pretest:desktop": "npm run build",
-    "prepackage": "npm run build"
+    "prepackage": "npm run build",
+    "prerelease": "npm run build",
+    "release": "node scripts/release.cjs",
+    "test:release": "node scripts/test-release.cjs"
   },
   "dependencies": {
     "@tiptap/core": "3.31.3",
@@ -29,6 +32,7 @@
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "electron": "44.4.5",
+    "electron-builder": "26.15.3",
     "esbuild": "0.28.2"
   }
 }

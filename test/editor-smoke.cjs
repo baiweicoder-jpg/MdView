@@ -56,6 +56,6 @@ module.exports = async ({ win, openDocument, app }) => {
     }
     win.webContents.on('paint', paint); win.webContents.invalidate();
   });
-  await fs.writeFile(path.join(process.cwd(), 'artifacts', 'desktop', 'editor.png'), screenshot.toPNG());
+  await fs.writeFile(path.join(process.cwd(), 'artifacts', app.isPackaged ? 'packaged' : 'desktop', 'editor.png'), screenshot.toPNG());
   console.log('Editor smoke: no-op fidelity, rich editing, image paths, code highlight/dialog/zoom, save, preview, cancel and conflict passed');
 };

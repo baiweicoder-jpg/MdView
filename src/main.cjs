@@ -4,8 +4,18 @@ const { pathToFileURL } = require('node:url');
 const { readDocument } = require('./markdown.cjs');
 
 const smoke = process.argv.includes('--smoke-test');
+const portableDirectory = app.isPackaged && process.env.PORTABLE_EXECUTABLE_DIR;
+if (portableDirectory) {
+  const dataDirectory = path.join(portableDirectory, 'MdView-data');
+  try { require('node:fs').mkdirSync(dataDirectory, { recursive: true }); }
+  catch {
+    dialog.showErrorBox('无法启动便携版', '请将便携版放在可写目录中运行，偏好设置保存在旁边的 MdView-data 文件夹。');
+    app.exit(1);
+  }
+  app.setPath('userData', dataDirectory);
+}
 if (smoke) {
-  app.setPath('userData', path.join(app.getPath('temp'), `mdview-smoke-${process.pid}`));
+  if (!portableDirectory) app.setPath('userData', path.join(app.getPath('temp'), `mdview-smoke-${process.pid}`));
   app.disableHardwareAcceleration();
 }
 let win;

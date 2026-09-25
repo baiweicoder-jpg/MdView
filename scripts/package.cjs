@@ -7,9 +7,11 @@ async function build() {
     asar: true, prune: true,
     icon: path.join(__dirname, '..', 'src', 'assets', 'mdview.ico'),
     download: { checksums: require('electron/checksums.json') },
-    ignore: [/^\/artifacts($|\/)/, /^\/dist($|\/)/, /^\/scripts($|\/)/],
+    ignore: [/^\/artifacts($|\/)/, /^\/dist($|\/)/, /^\/scripts($|\/)/, /^\/build($|\/)/],
     win32metadata: { CompanyName: 'MdView', FileDescription: 'MdView Markdown Reader', ProductName: 'MdView' }
   });
   console.log(`Windows 应用：${outputs.join('\n')}`);
+  return outputs[0];
 }
-build().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = build;
+if (require.main === module) build().catch(error => { console.error(error); process.exitCode = 1; });
