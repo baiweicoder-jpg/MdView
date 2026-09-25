@@ -7,9 +7,10 @@ const media = matchMedia('(prefers-color-scheme: dark)');
 let preferences = {};
 try { preferences = JSON.parse(localStorage.getItem('mdview-preferences') || '{}') || {}; } catch {}
 let fontSize = Number.isInteger(preferences.fontSize) ? Math.max(13, Math.min(24, preferences.fontSize)) : 16;
+let toolsCollapsed = preferences.toolsCollapsed === true;
 $('#theme').value = ['system', 'light', 'dark', 'warm'].includes(preferences.theme) ? preferences.theme : 'system';
 function savePreferences() {
-  try { localStorage.setItem('mdview-preferences', JSON.stringify({ theme: $('#theme').value, fontSize })); } catch {}
+  try { localStorage.setItem('mdview-preferences', JSON.stringify({ theme: $('#theme').value, fontSize, toolsCollapsed })); } catch {}
 }
 function applyTheme() {
   const selected = $('#theme').value;
@@ -97,6 +98,9 @@ async function changeSaveDirectory(reset) {
 $('#choose-save-directory').addEventListener('click', () => changeSaveDirectory(false));
 $('#reset-save-directory').addEventListener('click', () => changeSaveDirectory(true));
 $('#reload').addEventListener('click', () => perform(() => window.mdview.reload()));
+$('#file-actions').addEventListener('click', event => {
+  if (event.target.closest('button:not(:disabled)')) $('#file-actions').hidePopover();
+});
 function toggleOutline() {
   const hidden = document.body.classList.toggle('outline-hidden');
   $('#toggle-outline').setAttribute('aria-expanded', String(!hidden));
@@ -116,7 +120,7 @@ window.mdview.onDocument(result => {
   }
   renderDocument(result);
   if (result.ok && result.edit) {
-    richEditor = MdViewRich.create($('#editor-content'), currentDocument, changed);
+    createRichEditor();
     editing = true; setEditingUI();
     richEditor.editor.commands.focus();
   }
@@ -133,6 +137,8 @@ function renderDocument(result) {
   currentPath = doc.path;
   $('#content').innerHTML = doc.html;
   $('#file-name').textContent = doc.name;
+  $('#toolbar-file-name').textContent = doc.name;
+  $('#toolbar-file-name').title = doc.path || doc.name;
   $('#file-path').textContent = doc.path || '尚未保存 · Ctrl+S 选择文件名并保存';
   $('#file-path').title = doc.path;
   $('#document-status').textContent = `${doc.characters.toLocaleString()} 字符 · ${doc.headings.length} 个章节`;
@@ -223,19 +229,53 @@ applyFont();
 
 function payload() { return { id: currentDocument.id, source: richEditor ? richEditor.source() : currentDocument.source }; }
 function setEditingUI() {
+  document.body.classList.toggle('is-editing', editing);
+  applyToolsPanel();
   $('#editor-content').hidden = !editing;
   $('#editor-tools').hidden = !editing;
   $('#content').hidden = editing;
   $('.end-mark').hidden = editing;
-  $('#edit').textContent = editing ? '完成编辑' : '编辑';
+  $('#edit-label').textContent = editing ? '完成编辑' : '编辑';
+  $('#edit').setAttribute('aria-pressed', String(editing));
   const dirty = currentDocument && payload().source !== currentDocument.source;
   $('#edit-status').textContent = dirty ? '未保存' : editing ? '编辑中' : '';
+  $('#edit-status').classList.toggle('dirty', Boolean(dirty));
+  syncEditorTools();
 }
+function createRichEditor() {
+  richEditor = MdViewRich.create($('#editor-content'), currentDocument, changed);
+  richEditor.editor.on('transaction', syncEditorTools);
+}
+function syncEditorTools() {
+  if (!richEditor) return;
+  const editor = richEditor.editor;
+  const activeTypes = { toggleBold: 'bold', toggleItalic: 'italic', toggleBulletList: 'bulletList', toggleOrderedList: 'orderedList', toggleBlockquote: 'blockquote', toggleCodeBlock: 'codeBlock' };
+  for (const button of $('#editor-tools').querySelectorAll('[data-edit]')) {
+    const action = button.dataset.edit;
+    if (activeTypes[action]) button.setAttribute('aria-pressed', String(editor.isActive(activeTypes[action])));
+    button.disabled = fileBusy || !editing || (action === 'table' ? !editor.can().insertTable({ rows: 3, cols: 3, withHeaderRow: true }) : !editor.can()[action]());
+  }
+  $('#block-type').disabled = fileBusy || !editing;
+  $('#block-type').value = String(editor.isActive('heading') ? editor.getAttributes('heading').level : 0);
+}
+function applyToolsPanel() {
+  $('#editor-tools').classList.toggle('collapsed', toolsCollapsed);
+  $('#editor-panel-body').hidden = toolsCollapsed;
+  $('#toggle-editor-tools').setAttribute('aria-expanded', String(!toolsCollapsed));
+  const label = toolsCollapsed ? '展开格式面板' : '折叠格式面板';
+  $('#toggle-editor-tools').setAttribute('aria-label', label);
+  $('#toggle-editor-tools').title = label;
+}
+$('#toggle-editor-tools').addEventListener('click', () => {
+  toolsCollapsed = !toolsCollapsed; applyToolsPanel(); savePreferences();
+  $('#toggle-editor-tools').focus({ preventScroll: true });
+});
+applyToolsPanel();
 function changed() { window.mdview.draft(payload()); setEditingUI(); }
 async function toggleEditing() {
   if (!currentDocument || fileBusy) return;
   if (codeDialog.open) codeDialog.close();
-  if (!richEditor) richEditor = MdViewRich.create($('#editor-content'), currentDocument, changed);
+  if (!richEditor) createRichEditor();
   if (editing) {
     const doc = await window.mdview.preview(payload());
     renderDocument({ ok: true, document: doc });
@@ -258,6 +298,7 @@ window.mdview.onBusy(value => {
   fileBusy = value;
   richEditor?.editor.setEditable(!value, false);
   for (const id of ['new', 'open', 'reload', 'edit', 'save', 'save-as']) $('#' + id).disabled = value;
+  syncEditorTools();
 });
 window.addEventListener('beforeunload', event => {
   if (currentDocument && payload().source !== currentDocument.source) { event.preventDefault(); event.returnValue = ''; }
@@ -267,14 +308,16 @@ window.mdview.onSaved(result => {
   currentDocument = { ...currentDocument, ...result };
   richEditor?.saved(result.snapshot, result.source);
   $('#file-name').textContent = result.name;
+  $('#toolbar-file-name').textContent = result.name;
+  $('#toolbar-file-name').title = result.path;
   $('#file-path').textContent = result.path;
   $('#file-path').title = result.path;
   setEditingUI(); toast('已保存');
 });
-$('#editor-tools').addEventListener('mousedown', event => { if (event.target.closest('button')) event.preventDefault(); });
+$('#editor-tools').addEventListener('mousedown', event => { if (event.target.closest('[data-edit]')) event.preventDefault(); });
 $('#editor-tools').addEventListener('click', event => {
   const action = event.target.closest('[data-edit]')?.dataset.edit;
-  if (!action || !richEditor) return;
+  if (!action || !richEditor || fileBusy || !editing) return;
   const chain = richEditor.editor.chain().focus();
   if (action === 'table') chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   else chain[action]().run();
