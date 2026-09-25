@@ -81,6 +81,18 @@ main { flex: 1; min-width: 0; overflow-y: auto; padding: 35px clamp(28px, 5vw, 7
 .code-actions button:hover { color: var(--accent); background: var(--accent-soft); }
 .code-zoom-reset { min-width: 48px; font-variant-numeric: tabular-nums; }
 .code-actions .copy-code { border-left: 1px solid var(--border); border-radius: 0; margin-left: 5px; padding-left: 12px; }
+#code-dialog { width: min(1120px, calc(100vw - 48px)); height: min(780px, calc(100vh - 48px)); max-width: none; max-height: none; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: 0 24px 80px #0004; }
+#code-dialog[open] { display: flex; flex-direction: column; gap: 16px; }
+#code-dialog::backdrop { background: #0d16218c; }
+.code-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-shrink: 0; }
+.code-dialog-heading > div { min-width: 0; }
+.code-dialog-heading strong { display: block; color: var(--heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code-dialog-heading span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+#close-code-dialog { flex-shrink: 0; }
+#code-dialog-content { display: flex; flex: 1; min-height: 0; width: 100%; }
+#code-dialog-content .code-block { display: flex; flex-direction: column; width: 100%; margin: 0; }
+#code-dialog-content .code-toolbar { flex-shrink: 0; }
+#code-dialog-content pre { flex: 1; min-height: 0; overscroll-behavior: contain; }
 .markdown pre { overflow: auto; padding: 18px 20px; margin: 0; background: var(--code); line-height: 1.65; }
 .code-block pre { font-size: calc(1em * var(--code-scale, 1)); }
 .markdown pre code { padding: 0; border-radius: 0; overflow-wrap: normal; white-space: pre; }

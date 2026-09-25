@@ -34,6 +34,11 @@
     </main>
   </div>
   <footer><span id="document-status">就绪</span><span>UTF-8<span class="footer-separator">·</span>Markdown<span class="footer-separator">·</span><span id="theme-status">浅色</span></span></footer>
+  <dialog id="code-dialog" aria-labelledby="code-dialog-title">
+    <header class="code-dialog-heading"><div><strong id="code-dialog-title">单独查看代码</strong><span>Ctrl＋滚轮缩放 · 点击百分比恢复默认</span></div><button id="close-code-dialog" type="button" autofocus>关闭 Esc</button></header>
+    <div id="code-dialog-content" class="markdown"></div>
+    <div id="code-dialog-status" class="sr-only" role="status"></div>
+  </dialog>
   <div id="drop-overlay" hidden><div><strong>松开，开始阅读</strong><span>支持 .md / .markdown</span></div></div>
   <div id="toast" role="status" hidden></div>
 </body>

@@ -27,6 +27,7 @@ test('both fenced and indented code have independent zoom and copy controls', as
   assert.equal((result.html.match(/data-code-zoom="1"/g) || []).length, 2);
   assert.equal((result.html.match(/data-code-zoom="-1"/g) || []).length, 2);
   assert.equal((result.html.match(/class="copy-code"/g) || []).length, 2);
+  assert.equal((result.html.match(/class="expand-code"/g) || []).length, 2);
   assert.match(result.html, /&lt;script&gt;plain text&lt;\/script&gt;/);
 });
 

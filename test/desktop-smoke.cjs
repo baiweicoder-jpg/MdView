@@ -35,13 +35,60 @@ module.exports = async ({ win, openDocument, app }) => {
   assert.equal(prefs.sandbox, true);
   assert.equal(prefs.contextIsolation, true);
   assert.equal(prefs.nodeIntegration, false);
+  const codeAppearance = selector => evaluate(`(() => {
+    const block = document.querySelector(${JSON.stringify(selector)});
+    const code = block.querySelector('code');
+    const style = getComputedStyle(code);
+    const pre = getComputedStyle(block.querySelector('pre'));
+    return { html: code.innerHTML, fontSize: style.fontSize, fontFamily: style.fontFamily,
+      color: style.color, lineHeight: style.lineHeight, whiteSpace: style.whiteSpace,
+      background: pre.backgroundColor, padding: pre.padding,
+      toolbar: getComputedStyle(block.querySelector('.code-toolbar')).backgroundColor,
+      highlights: [...code.querySelectorAll('span')].map(span => getComputedStyle(span).color) };
+  })()`);
+  await evaluate("document.querySelector('.code-block [data-code-zoom=\"1\"]').click()");
   const themeColors = [];
   for (const theme of ['light', 'dark', 'warm']) {
     await evaluate(`document.querySelector('#theme').value = ${JSON.stringify(theme)}; document.querySelector('#theme').dispatchEvent(new Event('change'));`);
     themeColors.push(await evaluate("getComputedStyle(document.querySelector('.hljs-keyword')).color"));
     await delay(100);
     await fs.writeFile(path.join(artifacts, `${theme}.png`), (await capture()).toPNG());
+    const original = await codeAppearance('#content .code-block');
+    const readingScroll = await evaluate("document.querySelector('#reader').scrollTop");
+    await evaluate("document.querySelector('#content .expand-code').click()");
+    await waitFor("document.querySelector('#code-dialog').open");
+    assert.deepEqual(await codeAppearance('#code-dialog .code-block'), original);
+    assert.equal(await evaluate("document.querySelector('#code-dialog .code-zoom-reset').textContent"), '110%');
+    assert.equal(await evaluate("document.querySelectorAll('#code-dialog .expand-code').length"), 0);
+    assert.equal(await evaluate("!!document.querySelector('#code-dialog .copy-code')"), true);
+    await delay(100);
+    await fs.writeFile(path.join(artifacts, `dialog-${theme}.png`), (await capture()).toPNG());
+    win.webContents.debugger.attach('1.3');
+    try {
+      const wheel = deltaY => win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 550, y: 350, deltaX: 0, deltaY, modifiers: 2 });
+      await wheel(-120);
+      await waitFor("document.querySelector('#code-dialog .code-zoom-reset').textContent === '120%'");
+      await wheel(120);
+      await waitFor("document.querySelector('#code-dialog .code-zoom-reset').textContent === '110%'");
+      assert.equal(await evaluate("document.querySelector('#font-size').textContent"), '16');
+      assert.equal(win.webContents.getZoomFactor(), 1);
+      assert.deepEqual(await codeAppearance('#content .code-block'), original);
+      await evaluate("document.querySelector('#code-dialog .code-zoom-reset').click()");
+      assert.equal(await evaluate("document.querySelector('#code-dialog .code-zoom-reset').textContent"), '100%');
+      assert.deepEqual(await codeAppearance('#content .code-block'), original);
+      if (theme === 'light') await evaluate("document.querySelector('#close-code-dialog').click()");
+      else {
+        await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+        await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+      }
+    } finally {
+      win.webContents.debugger.detach();
+    }
+    await waitFor("!document.querySelector('#code-dialog').open && !document.querySelector('#code-dialog-content').children.length");
+    assert.equal(await evaluate("document.activeElement.classList.contains('expand-code')"), true);
+    assert.equal(await evaluate("document.querySelector('#reader').scrollTop"), readingScroll);
   }
+  await evaluate("document.querySelector('#content .code-zoom-reset').click()");
   assert.equal(new Set(themeColors).size, 3);
   await evaluate("document.querySelector('.code-block').scrollIntoView({block: 'center', behavior: 'instant'})");
   await delay(100);
@@ -128,8 +175,11 @@ module.exports = async ({ win, openDocument, app }) => {
   await evaluate("document.querySelector('#theme').value = 'dark'; document.querySelector('#theme').dispatchEvent(new Event('change'));");
   assert.equal(await evaluate("document.querySelector('#reader').scrollTop"), scrollBefore);
   await fs.appendFile(document, '\n## 新增章节\n\n刷新后的内容。');
+  await evaluate("document.querySelectorAll('#content .expand-code')[1].click()");
+  assert.equal(await evaluate("document.querySelector('#code-dialog code').textContent"), 'print("indented code")\n');
   await evaluate('window.mdview.reload()');
   await waitFor("document.querySelectorAll('#outline a').length === 32");
+  await waitFor("!document.querySelector('#code-dialog').open && !document.querySelector('#code-dialog-content').children.length");
   await openDocument(path.join(directory, 'missing.md'), false);
   await waitFor("!document.querySelector('#notice').hidden");
   assert.equal(await evaluate("document.querySelector('#file-name').textContent"), '桌面 验证.md');
@@ -143,7 +193,11 @@ module.exports = async ({ win, openDocument, app }) => {
   await delay(100);
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
   await fs.writeFile(path.join(artifacts, 'narrow.png'), (await capture()).toPNG());
-  const report = { packaged: app.isPackaged, electron: process.versions.electron, checks: ['Markdown and syntax highlighting', 'renderer sandbox and context isolation', 'three theme palettes', 'font and theme persistence across reload', 'native file drag and drop with Unicode and space paths', 'local image decoding', 'HTML injection inert', 'independent fenced and indented code zoom, limits and reset', 'Ctrl+wheel font zoom, bounds and saved preference', 'ordinary wheel scroll and unchanged interface zoom', 'outline navigation', 'theme preserves scroll', 'document refresh', 'missing file preserves content', 'outline toggle', '800px layout'], screenshotDirectory: artifacts };
+  await evaluate("document.querySelector('#content .expand-code').click()");
+  await delay(100);
+  assert.equal(await evaluate("(() => { const d = document.querySelector('#code-dialog'); const r = d.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight && d.scrollWidth <= d.clientWidth; })()"), true);
+  await fs.writeFile(path.join(artifacts, 'dialog-narrow.png'), (await capture()).toPNG());
+  const report = { packaged: app.isPackaged, electron: process.versions.electron, checks: ['Markdown and syntax highlighting', 'renderer sandbox and context isolation', 'three theme palettes', 'dialog preserves highlighted HTML and computed styles in all themes', 'dialog Ctrl+wheel and reset isolate source and reading font', 'dialog close button and Escape restore focus and reading position', 'indented code dialog closes on document refresh', 'dialog fits narrow window', 'font and theme persistence across reload', 'native file drag and drop with Unicode and space paths', 'local image decoding', 'HTML injection inert', 'independent fenced and indented code zoom, limits and reset', 'Ctrl+wheel font zoom, bounds and saved preference', 'ordinary wheel scroll and unchanged interface zoom', 'outline navigation', 'theme preserves scroll', 'document refresh', 'missing file preserves content', 'outline toggle', '800px layout'], screenshotDirectory: artifacts };
   await fs.writeFile(path.join(artifacts, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 };

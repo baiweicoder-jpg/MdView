@@ -1,5 +1,7 @@
 const $ = selector => document.querySelector(selector);
 const reader = $('#reader');
+const codeDialog = $('#code-dialog');
+let codeDialogTrigger;
 const themeNames = { light: '浅色', dark: '深色', warm: '暖纸' };
 const media = matchMedia('(prefers-color-scheme: dark)');
 let preferences = {};
@@ -27,6 +29,29 @@ function changeFont(delta) {
   fontSize = Math.max(13, Math.min(24, fontSize + delta));
   applyFont();
 }
+function changeCodeZoom(block, direction) {
+  const percent = direction === 0 ? 100 : Math.max(70, Math.min(200, Number(block.dataset.codeZoom || 100) + direction * 10));
+  block.dataset.codeZoom = percent;
+  block.style.setProperty('--code-scale', percent / 100);
+  block.querySelector('.code-zoom-reset').textContent = `${percent}%`;
+  block.querySelector('[data-code-zoom="-1"]').disabled = percent === 70;
+  block.querySelector('[data-code-zoom="1"]').disabled = percent === 200;
+}
+function openCodeDialog(button) {
+  const clone = button.closest('.code-block').cloneNode(true);
+  clone.querySelector('.expand-code').remove();
+  $('#code-dialog-title').textContent = `单独查看 · ${clone.querySelector('.code-language').textContent}`;
+  $('#code-dialog-content').replaceChildren(clone);
+  $('#code-dialog-status').textContent = '';
+  codeDialogTrigger = button;
+  codeDialog.showModal();
+}
+$('#close-code-dialog').addEventListener('click', () => codeDialog.close());
+codeDialog.addEventListener('close', () => {
+  $('#code-dialog-content').replaceChildren();
+  if (codeDialogTrigger?.isConnected) codeDialogTrigger.focus({ preventScroll: true });
+  codeDialogTrigger = null;
+});
 let toastTimer;
 function toast(message) {
   $('#toast').textContent = message;
@@ -44,7 +69,10 @@ $('#font-up').addEventListener('click', () => changeFont(1));
 document.addEventListener('wheel', event => {
   if (!event.ctrlKey) return;
   event.preventDefault();
-  if (event.deltaY) changeFont(-Math.sign(event.deltaY));
+  if (!event.deltaY) return;
+  const direction = -Math.sign(event.deltaY);
+  if (codeDialog.open) changeCodeZoom(codeDialog.querySelector('.code-block'), direction);
+  else changeFont(direction);
 }, { passive: false });
 $('#open').addEventListener('click', () => perform(() => window.mdview.open()));
 $('#reload').addEventListener('click', () => perform(() => window.mdview.reload()));
@@ -63,6 +91,7 @@ window.mdview.onDocument(result => {
     return;
   }
   const doc = result.document;
+  if (codeDialog.open) codeDialog.close();
   const previousScroll = currentPath === doc.path ? reader.scrollTop : 0;
   currentPath = doc.path;
   $('#content').innerHTML = doc.html;
@@ -100,21 +129,23 @@ window.mdview.onDocument(result => {
   reader.scrollTop = previousScroll;
 });
 document.addEventListener('click', event => {
+  const expand = event.target.closest('.expand-code');
+  if (expand) { openCodeDialog(expand); return; }
   const zoom = event.target.closest('button[data-code-zoom]');
   if (zoom) {
-    const block = zoom.closest('.code-block');
-    const direction = Number(zoom.dataset.codeZoom);
-    const percent = direction === 0 ? 100 : Math.max(70, Math.min(200, Number(block.dataset.codeZoom || 100) + direction * 10));
-    block.dataset.codeZoom = percent;
-    block.style.setProperty('--code-scale', percent / 100);
-    block.querySelector('.code-zoom-reset').textContent = `${percent}%`;
-    block.querySelector('[data-code-zoom="-1"]').disabled = percent === 70;
-    block.querySelector('[data-code-zoom="1"]').disabled = percent === 200;
+    changeCodeZoom(zoom.closest('.code-block'), Number(zoom.dataset.codeZoom));
     return;
   }
   const copy = event.target.closest('.copy-code');
   if (copy) {
-    perform(async () => { await window.mdview.copy(copy.closest('.code-block').querySelector('code').textContent); toast('代码已复制'); });
+    perform(async () => {
+      await window.mdview.copy(copy.closest('.code-block').querySelector('code').textContent);
+      if (codeDialog.open) {
+        $('#code-dialog-status').textContent = '代码已复制';
+        copy.textContent = '已复制';
+        setTimeout(() => { copy.textContent = '复制'; }, 1600);
+      } else toast('代码已复制');
+    });
     return;
   }
   const link = event.target.closest('a');
