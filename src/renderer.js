@@ -113,7 +113,61 @@ let currentDocument;
 let richEditor;
 let editing = false;
 let fileBusy = false;
-window.mdview.onDocument(result => {
+let tabs = [];
+const scrollByPath = new Map();
+window.mdview.onTabs(list => { tabs = list; renderTabs(); });
+function renderTabs() {
+  const bar = $('#tab-bar');
+  bar.replaceChildren();
+  for (const tab of tabs) {
+    const item = document.createElement('div');
+    item.className = 'tab' + (tab.active ? ' active' : '') + (tab.dirty ? ' dirty' : '');
+    item.dataset.id = tab.id;
+    item.setAttribute('role', 'tab');
+    item.setAttribute('aria-selected', String(tab.active));
+    item.title = tab.path || tab.name;
+    const name = document.createElement('span');
+    name.className = 'tab-name';
+    name.textContent = tab.name;
+    const close = document.createElement('button');
+    close.className = 'tab-close';
+    close.type = 'button';
+    close.setAttribute('aria-label', `关闭 ${tab.name}`);
+    close.textContent = '×';
+    item.append(name, close);
+    bar.append(item);
+  }
+}
+$('#tab-bar').addEventListener('click', event => {
+  const tab = event.target.closest('.tab');
+  if (!tab) return;
+  const id = Number(tab.dataset.id);
+  if (event.target.closest('.tab-close')) {
+    event.stopPropagation();
+    perform(() => closeTab(id));
+  } else if (!tab.classList.contains('active')) {
+    perform(() => switchToTab(id));
+  }
+});
+async function switchToTab(id) {
+  if (fileBusy) return;
+  const result = await window.mdview.switchTab({ id, source: payload().source });
+  if (result && result.document) processDocument({ ok: true, document: result.document, edit: result.edit });
+}
+async function closeTab(id) {
+  if (fileBusy) return;
+  await window.mdview.closeTab({ id, source: payload().source });
+}
+window.mdview.onCloseTabRequest(() => { if (currentDocument) perform(() => closeTab(currentDocument.id)); });
+window.mdview.onNextTabRequest(() => {
+  const index = tabs.findIndex(tab => tab.active);
+  if (index >= 0 && tabs.length > 1) perform(() => switchToTab(tabs[(index + 1) % tabs.length].id));
+});
+window.mdview.onPreviousTabRequest(() => {
+  const index = tabs.findIndex(tab => tab.active);
+  if (index >= 0 && tabs.length > 1) perform(() => switchToTab(tabs[(index - 1 + tabs.length) % tabs.length].id));
+});
+function processDocument(result) {
   if (result.ok) {
     richEditor?.destroy(); richEditor = null; editing = false;
     currentDocument = result.document; setEditingUI();
@@ -124,7 +178,8 @@ window.mdview.onDocument(result => {
     editing = true; setEditingUI();
     richEditor.editor.commands.focus();
   }
-});
+}
+window.mdview.onDocument(processDocument);
 function renderDocument(result) {
   if (!result.ok) {
     $('#notice').textContent = result.message;
@@ -133,7 +188,7 @@ function renderDocument(result) {
   }
   const doc = result.document;
   if (codeDialog.open) codeDialog.close();
-  const previousScroll = currentPath === doc.path ? reader.scrollTop : 0;
+  if (currentPath && currentPath !== doc.path) scrollByPath.set(currentPath, reader.scrollTop);
   currentPath = doc.path;
   $('#content').innerHTML = doc.html;
   $('#file-name').textContent = doc.name;
@@ -169,7 +224,7 @@ function renderDocument(result) {
     }
   }, { root: reader, rootMargin: '0px 0px -65% 0px' });
   for (const heading of $('#content').querySelectorAll('h1,h2,h3,h4,h5,h6')) observer.observe(heading);
-  reader.scrollTop = previousScroll;
+  reader.scrollTop = scrollByPath.get(doc.path) || 0;
 }
 document.addEventListener('click', event => {
   const expand = event.target.closest('.expand-code');
@@ -301,7 +356,7 @@ window.mdview.onBusy(value => {
   syncEditorTools();
 });
 window.addEventListener('beforeunload', event => {
-  if (currentDocument && payload().source !== currentDocument.source) { event.preventDefault(); event.returnValue = ''; }
+  if (tabs.some(tab => tab.dirty) || (currentDocument && payload().source !== currentDocument.source)) { event.preventDefault(); event.returnValue = ''; }
 });
 window.mdview.onSaved(result => {
   if (result.id !== currentDocument.id) return;

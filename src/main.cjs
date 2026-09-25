@@ -20,22 +20,19 @@ if (smoke) {
 }
 let win;
 let editSession;
-let currentFile;
 let requestNumber = 0;
 const page = pathToFileURL(path.join(__dirname, 'index.html')).href;
 const welcome = path.join(__dirname, '..', 'examples', '欢迎使用.md');
 
 async function openDocument(file, remember = true) {
-  return editSession.load(() => loadDocument(file, remember));
+  return loadDocument(file, remember);
 }
-async function loadDocument(file, remember = true) {
+async function loadDocument(file, remember = true, reload = false) {
   const request = ++requestNumber;
   try {
     const document = await readDocument(file);
     if (request !== requestNumber) return;
-    currentFile = file;
-    win.setTitle(`${document.name} — MdView`);
-    win.webContents.send('document', { ok: true, document: editSession.accept(document) });
+    editSession.openDocument(document, reload);
     if (remember && !smoke) app.addRecentDocument(file);
     return document;
   } catch (error) {
@@ -44,18 +41,20 @@ async function loadDocument(file, remember = true) {
   }
 }
 
+async function reloadDocument() {
+  const file = editSession.file;
+  if (!file) { newDocument(); return; }
+  if (!(await editSession.confirmLeaveActive())) return;
+  return loadDocument(file, false, true);
+}
+
 async function chooseDocument() {
   const result = await dialog.showOpenDialog(win, { title: '打开 Markdown', properties: ['openFile'], filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }] });
   if (!result.canceled) await openDocument(result.filePaths[0]);
 }
 
-async function newDocument() {
-  return editSession.load(async () => {
-    ++requestNumber;
-    const document = editSession.accept({ path: '', name: '未命名.md', source: '', html: '', editorHtml: '', headings: [], warnings: [], characters: 0, fingerprint: null, bom: false, newline: '\n' });
-    win.setTitle('未命名.md — MdView');
-    win.webContents.send('document', { ok: true, document, edit: true });
-  });
+function newDocument() {
+  editSession.newBlank();
 }
 
 function trusted(event) {
@@ -79,7 +78,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('open', event => { trusted(event); return chooseDocument(); });
   ipcMain.handle('new-document', event => { trusted(event); return newDocument(); });
   ipcMain.handle('drop', (event, file) => { trusted(event); return openDocument(file); });
-  ipcMain.handle('reload-document', event => { trusted(event); return editSession.file ? openDocument(editSession.file, false) : newDocument(); });
+  ipcMain.handle('reload-document', event => { trusted(event); return reloadDocument(); });
   ipcMain.handle('external', async (event, href) => {
     trusted(event);
     if (typeof href !== 'string' || href.length > 8192) return;
@@ -94,10 +93,14 @@ app.whenReady().then(async () => {
     { label: '文件', submenu: [
       { label: '新建空白文档', accelerator: 'Ctrl+N', click: newDocument },
       { label: '打开 Markdown…', accelerator: 'Ctrl+O', click: chooseDocument },
-      { label: '重新读取', accelerator: 'Ctrl+R', click: () => editSession.file ? openDocument(editSession.file, false) : newDocument() },
+      { label: '重新读取', accelerator: 'Ctrl+R', click: () => reloadDocument() },
       { label: '保存', accelerator: 'Ctrl+S', click: () => win.webContents.send('save-request', false) },
       { label: '另存为', accelerator: 'Ctrl+Shift+S', click: () => win.webContents.send('save-request', true) },
       { label: '编辑 / 阅读', accelerator: 'Ctrl+E', click: () => win.webContents.send('toggle-edit') },
+      { type: 'separator' },
+      { label: '下一个标签', accelerator: 'Ctrl+Tab', click: () => win.webContents.send('next-tab-request') },
+      { label: '上一个标签', accelerator: 'Ctrl+Shift+Tab', click: () => win.webContents.send('previous-tab-request') },
+      { label: '关闭标签', accelerator: 'Ctrl+W', click: () => win.webContents.send('close-tab-request') },
       { type: 'separator' }, { label: '退出', role: 'quit' }
     ] },
     { label: '查看', submenu: [
@@ -113,6 +116,7 @@ app.whenReady().then(async () => {
     try {
       await require('../test/desktop-smoke.cjs')({ win, openDocument, app });
       await require('../test/editor-smoke.cjs')({ win, openDocument, app });
+      await require('../test/tabs-smoke.cjs')({ win, openDocument, app });
       app.exit(0);
     } catch (error) {
       console.error(error);

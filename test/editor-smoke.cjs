@@ -97,11 +97,11 @@ module.exports = async ({ win, openDocument, app }) => {
   await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   assert.equal(await run('richEditor.editor.view.dom.contains(document.activeElement)'), true);
   await run("richEditor.editor.commands.insertContent('新文档内容')");
-  dialog.showMessageBox = async () => ({ response: 2 });
-  try {
-    await run('window.mdview.newDocument()');
-    assert.match(await run('payload().source'), /新文档内容/);
-  } finally { dialog.showMessageBox = originalDialog; }
+  const unnamedId = await run('currentDocument.id');
+  await run('window.mdview.newDocument()');
+  assert.equal(await run('payload().source'), '', 'new tab is blank');
+  await run(`switchToTab(${unnamedId})`);
+  assert.match(await run('payload().source'), /新文档内容/, 'draft survives adding another tab');
   dialog.showSaveDialog = async () => ({ canceled: true });
   try {
     await run('saveDocument()');
