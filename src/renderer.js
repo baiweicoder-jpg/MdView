@@ -75,6 +75,27 @@ document.addEventListener('wheel', event => {
   else changeFont(direction);
 }, { passive: false });
 $('#open').addEventListener('click', () => perform(() => window.mdview.open()));
+$('#new').addEventListener('click', () => perform(() => window.mdview.newDocument()));
+$('#settings').addEventListener('click', () => perform(async () => {
+  const settings = await window.mdview.getSettings();
+  $('#save-directory').textContent = settings.saveDirectory;
+  $('#settings-error').hidden = true;
+  $('#settings-dialog').showModal();
+}));
+$('#close-settings').addEventListener('click', () => $('#settings-dialog').close());
+async function changeSaveDirectory(reset) {
+  $('#choose-save-directory').disabled = $('#reset-save-directory').disabled = true;
+  $('#settings-error').hidden = true;
+  try {
+    const settings = await (reset ? window.mdview.resetSaveDirectory() : window.mdview.chooseSaveDirectory());
+    $('#save-directory').textContent = settings.saveDirectory;
+  } catch {
+    $('#settings-error').textContent = '无法保存设置，请检查文件夹权限后重试。';
+    $('#settings-error').hidden = false;
+  } finally { $('#choose-save-directory').disabled = $('#reset-save-directory').disabled = false; }
+}
+$('#choose-save-directory').addEventListener('click', () => changeSaveDirectory(false));
+$('#reset-save-directory').addEventListener('click', () => changeSaveDirectory(true));
 $('#reload').addEventListener('click', () => perform(() => window.mdview.reload()));
 function toggleOutline() {
   const hidden = document.body.classList.toggle('outline-hidden');
@@ -94,6 +115,11 @@ window.mdview.onDocument(result => {
     currentDocument = result.document; setEditingUI();
   }
   renderDocument(result);
+  if (result.ok && result.edit) {
+    richEditor = MdViewRich.create($('#editor-content'), currentDocument, changed);
+    editing = true; setEditingUI();
+    richEditor.editor.commands.focus();
+  }
 });
 function renderDocument(result) {
   if (!result.ok) {
@@ -107,7 +133,7 @@ function renderDocument(result) {
   currentPath = doc.path;
   $('#content').innerHTML = doc.html;
   $('#file-name').textContent = doc.name;
-  $('#file-path').textContent = doc.path;
+  $('#file-path').textContent = doc.path || '尚未保存 · Ctrl+S 选择文件名并保存';
   $('#file-path').title = doc.path;
   $('#document-status').textContent = `${doc.characters.toLocaleString()} 字符 · ${doc.headings.length} 个章节`;
   $('#heading-count').textContent = doc.headings.length;
@@ -231,7 +257,7 @@ window.mdview.onEditError(message => { $('#notice').textContent = message; $('#n
 window.mdview.onBusy(value => {
   fileBusy = value;
   richEditor?.editor.setEditable(!value, false);
-  for (const id of ['open', 'reload', 'edit', 'save', 'save-as']) $('#' + id).disabled = value;
+  for (const id of ['new', 'open', 'reload', 'edit', 'save', 'save-as']) $('#' + id).disabled = value;
 });
 window.addEventListener('beforeunload', event => {
   if (currentDocument && payload().source !== currentDocument.source) { event.preventDefault(); event.returnValue = ''; }

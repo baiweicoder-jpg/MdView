@@ -136,3 +136,8 @@ footer { display: flex; align-items: center; justify-content: space-between; min
 #edit-status { font-size: 12px; color: var(--accent); white-space: nowrap; }
 .toolbar { flex-wrap: wrap; }
 .tools { flex-wrap: wrap; }
+#settings-dialog { width: min(560px, calc(100vw - 48px)); padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: 0 24px 80px #0004; }
+#settings-dialog::backdrop { background: #0d16218c; }
+#save-directory { padding: 12px; background: var(--code); border-radius: 7px; overflow-wrap: anywhere; }
+.settings-note { color: var(--muted); font-size: 12px; }
+#settings-error { color: var(--deletion); }

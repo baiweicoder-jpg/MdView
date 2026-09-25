@@ -49,6 +49,15 @@ async function chooseDocument() {
   if (!result.canceled) await openDocument(result.filePaths[0]);
 }
 
+async function newDocument() {
+  return editSession.load(async () => {
+    ++requestNumber;
+    const document = editSession.accept({ path: '', name: '未命名.md', source: '', html: '', editorHtml: '', headings: [], warnings: [], characters: 0, fingerprint: null, bom: false, newline: '\n' });
+    win.setTitle('未命名.md — MdView');
+    win.webContents.send('document', { ok: true, document, edit: true });
+  });
+}
+
 function trusted(event) {
   if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== page) throw new Error('拒绝未授权请求。');
 }
@@ -62,13 +71,15 @@ app.whenReady().then(async () => {
     backgroundColor: '#f6f7f9', show: !smoke,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, offscreen: smoke }
   });
-  editSession = require('./edit-session.cjs')(win, trusted, welcome);
+  const getSettings = await require('./settings.cjs')(win, trusted);
+  editSession = require('./edit-session.cjs')(win, trusted, welcome, getSettings);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   win.webContents.on('will-attach-webview', event => event.preventDefault());
   ipcMain.handle('open', event => { trusted(event); return chooseDocument(); });
+  ipcMain.handle('new-document', event => { trusted(event); return newDocument(); });
   ipcMain.handle('drop', (event, file) => { trusted(event); return openDocument(file); });
-  ipcMain.handle('reload-document', event => { trusted(event); return openDocument(editSession.file || welcome, false); });
+  ipcMain.handle('reload-document', event => { trusted(event); return editSession.file ? openDocument(editSession.file, false) : newDocument(); });
   ipcMain.handle('external', async (event, href) => {
     trusted(event);
     if (typeof href !== 'string' || href.length > 8192) return;
@@ -81,8 +92,9 @@ app.whenReady().then(async () => {
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: '文件', submenu: [
+      { label: '新建空白文档', accelerator: 'Ctrl+N', click: newDocument },
       { label: '打开 Markdown…', accelerator: 'Ctrl+O', click: chooseDocument },
-      { label: '重新读取', accelerator: 'Ctrl+R', click: () => openDocument(editSession.file || welcome, false) },
+      { label: '重新读取', accelerator: 'Ctrl+R', click: () => editSession.file ? openDocument(editSession.file, false) : newDocument() },
       { label: '保存', accelerator: 'Ctrl+S', click: () => win.webContents.send('save-request', false) },
       { label: '另存为', accelerator: 'Ctrl+Shift+S', click: () => win.webContents.send('save-request', true) },
       { label: '编辑 / 阅读', accelerator: 'Ctrl+E', click: () => win.webContents.send('toggle-edit') },

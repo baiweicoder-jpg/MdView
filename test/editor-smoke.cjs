@@ -57,5 +57,53 @@ module.exports = async ({ win, openDocument, app }) => {
     win.webContents.on('paint', paint); win.webContents.invalidate();
   });
   await fs.writeFile(path.join(process.cwd(), 'artifacts', app.isPackaged ? 'packaged' : 'desktop', 'editor.png'), screenshot.toPNG());
-  console.log('Editor smoke: no-op fidelity, rich editing, image paths, code highlight/dialog/zoom, save, preview, cancel and conflict passed');
+  await run('window.mdview.newDocument()');
+  assert.equal(await run('editing && richEditor.editor.isEditable'), true);
+  assert.equal(await run('payload().source'), '');
+  assert.equal(await run('richEditor.editor.getText()'), '');
+  assert.equal(await run('currentDocument.path'), '');
+  assert.equal(await run('richEditor.editor.view.dom.contains(document.activeElement)'), true);
+  await run("richEditor.editor.commands.insertContent('新文档内容')");
+  dialog.showMessageBox = async () => ({ response: 2 });
+  try {
+    await run('window.mdview.newDocument()');
+    assert.match(await run('payload().source'), /新文档内容/);
+  } finally { dialog.showMessageBox = originalDialog; }
+  dialog.showSaveDialog = async () => ({ canceled: true });
+  try {
+    await run('saveDocument()');
+    assert.equal(await run('currentDocument.path'), '');
+    assert.match(await run('payload().source'), /新文档内容/);
+  } finally { dialog.showSaveDialog = saveDialog; }
+  const created = path.join(dir, 'new.md');
+  dialog.showSaveDialog = async () => ({ canceled: false, filePath: created });
+  try { await run('saveDocument()'); }
+  finally { dialog.showSaveDialog = saveDialog; }
+  assert.match(await fs.readFile(created, 'utf8'), /新文档内容/);
+  assert.equal(await run('currentDocument.path'), created);
+  const openDialog = dialog.showOpenDialog;
+  dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] });
+  try { await run('window.mdview.chooseSaveDirectory()'); }
+  finally { dialog.showOpenDialog = openDialog; }
+  assert.equal((await run('window.mdview.getSettings()')).saveDirectory, dir);
+  const persisted = JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'settings.json'), 'utf8'));
+  assert.equal(persisted.saveDirectory, dir);
+  dialog.showOpenDialog = async () => ({ canceled: true, filePaths: [] });
+  try { await run('window.mdview.chooseSaveDirectory()'); }
+  finally { dialog.showOpenDialog = openDialog; }
+  assert.equal((await run('window.mdview.getSettings()')).saveDirectory, dir);
+  await run('window.mdview.newDocument()');
+  let defaultPath;
+  dialog.showSaveDialog = async (_win, options) => { defaultPath = options.defaultPath; return { canceled: true }; };
+  try { await run('saveDocument()'); }
+  finally { dialog.showSaveDialog = saveDialog; }
+  assert.equal(defaultPath, path.join(dir, '未命名.md'));
+  await run("$('#settings').click()");
+  await run('new Promise(resolve => setTimeout(resolve, 50))');
+  assert.equal(await run("$('#settings-dialog').open"), true);
+  assert.equal(await run("$('#save-directory').textContent"), dir);
+  await run("$('#close-settings').click()");
+  await run('window.mdview.resetSaveDirectory()');
+  assert.equal((await run('window.mdview.getSettings()')).saveDirectory, app.getPath('documents'));
+  console.log('Editor smoke: editing, protected saves, editable new documents and persistent save directory passed');
 };

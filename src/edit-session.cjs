@@ -1,9 +1,9 @@
 const path = require('node:path');
-const { dialog, ipcMain, app } = require('electron');
+const { dialog, ipcMain } = require('electron');
 const { saveTextFile, readTextFile, MAX_DOCUMENT } = require('./document-file.cjs');
 const { renderMarkdown } = require('./markdown.cjs');
 
-module.exports = function editingSession(win, trusted, welcome) {
+module.exports = function editingSession(win, trusted, welcome, getSettings) {
   let document, source, dirty = false, busy = false, id = 0;
   const send = (channel, data) => { if (!win.isDestroyed()) win.webContents.send(channel, data); };
   function draft(payload) {
@@ -15,8 +15,9 @@ module.exports = function editingSession(win, trusted, welcome) {
   async function save(asNew) {
     const snapshot = source;
     let target = document.path, expectedHash = document.fingerprint;
-    if (asNew || target === welcome) {
-      const result = await dialog.showSaveDialog(win, { title: '保存 Markdown', defaultPath: target === welcome ? path.join(app.getPath('documents'), '我的文档.md') : target, filters: [{ name: 'Markdown', extensions: ['md'] }] });
+    if (asNew || !target || target === welcome) {
+      const name = !target ? '未命名.md' : target === welcome ? '我的文档.md' : path.basename(target);
+      const result = await dialog.showSaveDialog(win, { title: '保存 Markdown', defaultPath: path.join(getSettings().saveDirectory, name), filters: [{ name: 'Markdown', extensions: ['md'] }] });
       if (result.canceled) return { ok: false, canceled: true };
       target = result.filePath;
       if (target === welcome) throw Error('请另选位置保存，保留内置欢迎文档。');
@@ -54,7 +55,7 @@ module.exports = function editingSession(win, trusted, welcome) {
     trusted(event);
     if (payload.id !== id || typeof payload.source !== 'string' || Buffer.byteLength(payload.source) > MAX_DOCUMENT) throw Error('无效文档');
     const current = document;
-    return { ...current, ...await renderMarkdown(payload.source, path.dirname(current.path)), source: payload.source, characters: payload.source.length, id: payload.id };
+    return { ...current, ...await renderMarkdown(payload.source, current.path ? path.dirname(current.path) : getSettings().saveDirectory), source: payload.source, characters: payload.source.length, id: payload.id };
   });
   win.on('close', event => {
     if (busy || dirty) {
