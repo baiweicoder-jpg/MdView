@@ -16,7 +16,6 @@ const md = new MarkdownIt({
     return ''; // The renderer escapes unknown/unlabelled languages.
   }
 });
-const fence = md.renderer.rules.fence;
 for (const type of ['th_open', 'td_open']) {
   md.renderer.rules[type] = (tokens, index, _options, _env, self) => {
     const token = tokens[index];
@@ -28,10 +27,13 @@ for (const type of ['th_open', 'td_open']) {
     return self.renderToken(tokens, index, {});
   };
 }
-md.renderer.rules.fence = (tokens, index, options, env, self) => {
-  const language = tokens[index].info.trim().split(/\s+/)[0] || 'text';
-  return `<section class="code-block"><div class="code-toolbar"><span>${md.utils.escapeHtml(language)}</span><button class="copy-code" type="button" aria-label="复制代码">复制</button></div>${fence(tokens, index, options, env, self)}</section>`;
-};
+for (const type of ['fence', 'code_block']) {
+  const render = md.renderer.rules[type];
+  md.renderer.rules[type] = (tokens, index, options, env, self) => {
+    const language = tokens[index].info.trim().split(/\s+/)[0] || 'text';
+    return `<section class="code-block"><div class="code-toolbar"><span class="code-language">${md.utils.escapeHtml(language)}</span><div class="code-actions"><button type="button" data-code-zoom="-1" aria-label="缩小此代码块字号" title="缩小代码字号">A−</button><button type="button" data-code-zoom="0" class="code-zoom-reset" aria-label="恢复此代码块默认字号" title="恢复默认字号">100%</button><button type="button" data-code-zoom="1" aria-label="放大此代码块字号" title="放大代码字号">A＋</button><button class="copy-code" type="button" aria-label="复制代码">复制</button></div></div>${render(tokens, index, options, env, self)}</section>`;
+  };
+}
 
 async function readLimited(file, limit) {
   const handle = await fs.open(file, 'r');

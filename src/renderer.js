@@ -23,6 +23,10 @@ function applyFont() {
   $('#font-up').disabled = fontSize >= 24;
   savePreferences();
 }
+function changeFont(delta) {
+  fontSize = Math.max(13, Math.min(24, fontSize + delta));
+  applyFont();
+}
 let toastTimer;
 function toast(message) {
   $('#toast').textContent = message;
@@ -35,8 +39,13 @@ async function perform(action) {
 }
 $('#theme').addEventListener('change', applyTheme);
 media.addEventListener('change', applyTheme);
-$('#font-down').addEventListener('click', () => { fontSize = Math.max(13, fontSize - 1); applyFont(); });
-$('#font-up').addEventListener('click', () => { fontSize = Math.min(24, fontSize + 1); applyFont(); });
+$('#font-down').addEventListener('click', () => changeFont(-1));
+$('#font-up').addEventListener('click', () => changeFont(1));
+document.addEventListener('wheel', event => {
+  if (!event.ctrlKey) return;
+  event.preventDefault();
+  if (event.deltaY) changeFont(-Math.sign(event.deltaY));
+}, { passive: false });
 $('#open').addEventListener('click', () => perform(() => window.mdview.open()));
 $('#reload').addEventListener('click', () => perform(() => window.mdview.reload()));
 function toggleOutline() {
@@ -91,6 +100,18 @@ window.mdview.onDocument(result => {
   reader.scrollTop = previousScroll;
 });
 document.addEventListener('click', event => {
+  const zoom = event.target.closest('button[data-code-zoom]');
+  if (zoom) {
+    const block = zoom.closest('.code-block');
+    const direction = Number(zoom.dataset.codeZoom);
+    const percent = direction === 0 ? 100 : Math.max(70, Math.min(200, Number(block.dataset.codeZoom || 100) + direction * 10));
+    block.dataset.codeZoom = percent;
+    block.style.setProperty('--code-scale', percent / 100);
+    block.querySelector('.code-zoom-reset').textContent = `${percent}%`;
+    block.querySelector('[data-code-zoom="-1"]').disabled = percent === 70;
+    block.querySelector('[data-code-zoom="1"]').disabled = percent === 200;
+    return;
+  }
   const copy = event.target.closest('.copy-code');
   if (copy) {
     perform(async () => { await window.mdview.copy(copy.closest('.code-block').querySelector('code').textContent); toast('代码已复制'); });

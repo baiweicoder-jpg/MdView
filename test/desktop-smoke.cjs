@@ -53,7 +53,7 @@ module.exports = async ({ win, openDocument, app }) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mdview-desktop-'));
   await fs.writeFile(path.join(directory, '图 片.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64'));
   const document = path.join(directory, '桌面 验证.md');
-  await fs.writeFile(document, '# 本地文档\n\n![本地](图%20片.png)\n\n<script>window.injected = true</script>\n\n' + Array.from({ length: 30 }, (_, index) => `## 章节 ${index}\n\n这是一段用于验证目录跳转与滚动位置的正文。\n\n`).join(''));
+  await fs.writeFile(document, '# 本地文档\n\n![本地](图%20片.png)\n\n<script>window.injected = true</script>\n\n```js\nconst answer = 42;\n```\n\n    print("indented code")\n\n' + Array.from({ length: 30 }, (_, index) => `## 章节 ${index}\n\n这是一段用于验证目录跳转与滚动位置的正文。\n\n`).join(''));
   win.webContents.debugger.attach('1.3');
   try {
     for (const type of ['dragEnter', 'dragOver', 'drop']) {
@@ -65,6 +65,62 @@ module.exports = async ({ win, openDocument, app }) => {
   await waitFor("document.querySelector('#file-name').textContent === '桌面 验证.md' && document.querySelector('#content img')?.naturalWidth === 1");
   assert.equal(await evaluate('window.injected'), undefined);
   assert.equal(await evaluate("document.querySelectorAll('#outline a').length"), 31);
+  const codeState = () => evaluate(`({
+    sizes: [...document.querySelectorAll('.code-block pre code')].map(code => parseFloat(getComputedStyle(code).fontSize)),
+    text: [...document.querySelectorAll('.code-block pre code')].map(code => code.textContent),
+    body: getComputedStyle(document.querySelector('#content')).fontSize,
+    toolbar: getComputedStyle(document.querySelector('.toolbar')).fontSize
+  })`);
+  const initial = await codeState();
+  assert.equal(initial.sizes.length, 2);
+  await evaluate("document.querySelector('.code-block [data-code-zoom=\"1\"]').click()");
+  const enlarged = await codeState();
+  assert.ok(enlarged.sizes[0] > initial.sizes[0]);
+  assert.equal(enlarged.sizes[1], initial.sizes[1]);
+  assert.equal(enlarged.body, initial.body);
+  assert.deepEqual(enlarged.text, initial.text);
+  await evaluate("document.querySelector('.code-block pre code').click()");
+  assert.deepEqual((await codeState()).sizes, enlarged.sizes);
+  await evaluate("for(let i=0;i<30;i++) document.querySelector('.code-block [data-code-zoom=\"-1\"]').click()");
+  assert.equal(await evaluate("document.querySelector('.code-zoom-reset').textContent"), '70%');
+  assert.equal(await evaluate("document.querySelector('.code-block [data-code-zoom=\"-1\"]').disabled"), true);
+  await evaluate("for(let i=0;i<30;i++) document.querySelector('.code-block [data-code-zoom=\"1\"]').click()");
+  assert.equal(await evaluate("document.querySelector('.code-zoom-reset').textContent"), '200%');
+  assert.equal(await evaluate("document.querySelector('.code-block [data-code-zoom=\"1\"]').disabled"), true);
+  await evaluate("document.querySelector('.code-zoom-reset').click()");
+  assert.deepEqual((await codeState()).sizes, initial.sizes);
+  await evaluate("document.querySelectorAll('.code-block')[1].querySelector('[data-code-zoom=\"1\"]').click()");
+  assert.ok((await codeState()).sizes[1] > initial.sizes[1]);
+  await evaluate("document.querySelectorAll('.code-block')[1].querySelector('.code-zoom-reset').click()");
+  win.webContents.debugger.attach('1.3');
+  try {
+    const wheel = (deltaY, modifiers = 2) => win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 550, y: 350, deltaX: 0, deltaY, modifiers });
+    await wheel(-120);
+    await waitFor("document.querySelector('#font-size').textContent === '18'");
+    assert.ok((await codeState()).sizes.every((size, index) => size > initial.sizes[index]));
+    assert.equal((await codeState()).toolbar, initial.toolbar);
+    assert.equal(win.webContents.getZoomFactor(), 1);
+    await wheel(120);
+    await waitFor("document.querySelector('#font-size').textContent === '17'");
+    await evaluate("document.querySelector('#reader').scrollTo({top: 0, behavior: 'instant'})");
+    await wheel(180, 0);
+    await waitFor("document.querySelector('#reader').scrollTop > 0");
+    assert.equal(await evaluate("document.querySelector('#font-size').textContent"), '17');
+    await evaluate("for(let i=0;i<30;i++) document.querySelector('#font-up').click()");
+    await wheel(-120);
+    await delay(100);
+    assert.equal(await evaluate("document.querySelector('#font-size').textContent"), '24');
+    await evaluate("for(let i=0;i<30;i++) document.querySelector('#font-down').click()");
+    await wheel(120);
+    await delay(100);
+    assert.equal(await evaluate("document.querySelector('#font-size').textContent"), '13');
+    await evaluate("for(let i=0;i<3;i++) document.querySelector('#font-up').click()");
+    await wheel(-120);
+    await waitFor("document.querySelector('#font-size').textContent === '17'");
+    assert.equal(await evaluate("JSON.parse(localStorage.getItem('mdview-preferences')).fontSize"), 17);
+  } finally {
+    win.webContents.debugger.detach();
+  }
   await evaluate("document.querySelectorAll('#outline a')[10].click()");
   await waitFor("document.querySelector('#reader').scrollTop > 300");
   await delay(700);
@@ -87,7 +143,7 @@ module.exports = async ({ win, openDocument, app }) => {
   await delay(100);
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
   await fs.writeFile(path.join(artifacts, 'narrow.png'), (await capture()).toPNG());
-  const report = { packaged: app.isPackaged, electron: process.versions.electron, checks: ['Markdown and syntax highlighting', 'renderer sandbox and context isolation', 'three theme palettes', 'font and theme persistence across reload', 'native file drag and drop with Unicode and space paths', 'local image decoding', 'HTML injection inert', 'outline navigation', 'theme preserves scroll', 'document refresh', 'missing file preserves content', 'outline toggle', '800px layout'], screenshotDirectory: artifacts };
+  const report = { packaged: app.isPackaged, electron: process.versions.electron, checks: ['Markdown and syntax highlighting', 'renderer sandbox and context isolation', 'three theme palettes', 'font and theme persistence across reload', 'native file drag and drop with Unicode and space paths', 'local image decoding', 'HTML injection inert', 'independent fenced and indented code zoom, limits and reset', 'Ctrl+wheel font zoom, bounds and saved preference', 'ordinary wheel scroll and unchanged interface zoom', 'outline navigation', 'theme preserves scroll', 'document refresh', 'missing file preserves content', 'outline toggle', '800px layout'], screenshotDirectory: artifacts };
   await fs.writeFile(path.join(artifacts, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 };

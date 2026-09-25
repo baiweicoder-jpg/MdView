@@ -21,6 +21,15 @@ test('raw HTML, dangerous links and code language injection remain inert', async
   assert.match(result.html, /&lt;script&gt;/);
 });
 
+test('both fenced and indented code have independent zoom and copy controls', async () => {
+  const result = await renderMarkdown('```js\nconst a = 1;\n```\n\n    <script>plain text</script>\n');
+  assert.equal((result.html.match(/class="code-block"/g) || []).length, 2);
+  assert.equal((result.html.match(/data-code-zoom="1"/g) || []).length, 2);
+  assert.equal((result.html.match(/data-code-zoom="-1"/g) || []).length, 2);
+  assert.equal((result.html.match(/class="copy-code"/g) || []).length, 2);
+  assert.match(result.html, /&lt;script&gt;plain text&lt;\/script&gt;/);
+});
+
 test('loads Unicode and space paths, bounds image access and document size', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mdview-test-'));
   // Fixtures are deliberately retained in the OS temporary directory for inspection.
