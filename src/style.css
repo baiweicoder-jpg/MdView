@@ -50,7 +50,7 @@ nav a.active { background: var(--accent-soft); color: var(--accent); border-left
 .sidebar-note > span:last-child { padding-left: 13px; opacity: .8; }
 .status-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #6aa486; margin-right: 8px; vertical-align: middle; }
 main { flex: 1; min-width: 0; overflow-y: auto; padding: 35px clamp(28px, 5vw, 78px) 24px; scroll-behavior: smooth; }
-.document-header, .markdown, #notice, .end-mark { max-width: 840px; margin-left: auto; margin-right: auto; }
+.document-header, .markdown, #notice, .end-mark { margin-left: auto; margin-right: auto; }
 .document-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 30px; }
 .document-header > div { min-width: 0; }
 .eyebrow { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: 2px; margin-bottom: 8px; }
