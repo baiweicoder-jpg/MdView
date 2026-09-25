@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
   <title>MdView</title>
   <link rel="stylesheet" href="style.css">
   <script src="renderer.js" defer></script>
 </head>
 <body>
   <header class="toolbar">
-    <div class="brand"><span class="brand-icon">M<span>↓</span></span><strong>MdView</strong><span class="brand-label">阅读，让思路清晰</span></div>
+    <div class="brand"><img class="brand-icon" src="assets/mdview.svg" alt="MdView 书页标志"><strong>Md<span>View</span></strong><span class="brand-label">阅读，让思路清晰</span></div>
     <div class="tools">
       <button id="open" class="primary" title="打开 Markdown（Ctrl+O）">＋ 打开文件</button>
       <button id="reload" title="重新读取文件（Ctrl+R）">刷新</button>

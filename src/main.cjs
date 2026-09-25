@@ -44,6 +44,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler(() => false);
   win = new BrowserWindow({
     width: 1220, height: 860, minWidth: 760, minHeight: 520,
+    icon: path.join(__dirname, 'assets', 'mdview.png'),
     backgroundColor: '#f6f7f9', show: !smoke,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, offscreen: smoke }
   });

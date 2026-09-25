@@ -6,6 +6,7 @@
   "private": true,
   "main": "src/main.cjs",
   "scripts": {
+    "icons": "node scripts/icons.cjs",
     "start": "node scripts/launch.cjs",
     "test": "node --test test/markdown.test.cjs",
     "test:desktop": "node scripts/launch.cjs --smoke-test",

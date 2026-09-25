@@ -8,9 +8,14 @@ module.exports = async ({ win, openDocument, app }) => {
   const evaluate = code => win.webContents.executeJavaScript(code);
   // Wait for a software offscreen frame; hidden GPU capturePage can fail with UnknownVizError.
   const capture = () => new Promise((resolve, reject) => {
-    const painted = (_event, _dirty, image) => { clearTimeout(timeout); resolve(image); };
+    const painted = (_event, _dirty, image) => {
+      if (image.isEmpty()) { win.webContents.invalidate(); return; }
+      clearTimeout(timeout);
+      win.webContents.removeListener('paint', painted);
+      resolve(image);
+    };
     const timeout = setTimeout(() => { win.webContents.removeListener('paint', painted); reject(new Error('Offscreen paint timed out')); }, 8000);
-    win.webContents.once('paint', painted);
+    win.webContents.on('paint', painted);
     win.webContents.invalidate();
   });
   async function waitFor(code) {
@@ -24,6 +29,7 @@ module.exports = async ({ win, openDocument, app }) => {
   const artifacts = path.resolve('artifacts', app.isPackaged ? 'packaged' : 'desktop');
   await fs.mkdir(artifacts, { recursive: true });
   await waitFor("document.querySelectorAll('#content .hljs-keyword').length > 0");
+  await waitFor("document.querySelector('.brand-icon').naturalWidth === 256");
   assert.deepEqual(await evaluate("({node: typeof require, process: typeof process, bridge: typeof window.mdview.open})"), { node: 'undefined', process: 'undefined', bridge: 'function' });
   const prefs = win.webContents.getLastWebPreferences();
   assert.equal(prefs.sandbox, true);

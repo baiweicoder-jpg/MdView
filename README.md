@@ -8,6 +8,7 @@ Windows 本地 Markdown 阅读器。支持代码语法高亮、目录导航、�
 
 ```powershell
 npm ci
+npm run icons
 npm start
 npm test
 npm run test:desktop
@@ -34,6 +35,8 @@ Electron 主进程使用 markdown-it 和 highlight.js 生成内容，只读取�
 
 `src/markdown.cjs` 负责解析和受限文件读取；`src/main.cjs` 负责桌面与 IPC；`src/renderer.js` 和 `src/style.css` 负责阅读交互及主题。无 Web 构建流程、后端或数据库。
 
+专属标志以书页和 V 形阅读视线为设计元素。`src/assets/mdview.svg` 是矢量源稿，`npm run icons` 使用 Electron 自带的浏览器渲染生成 PNG 和 16–256 px 的 Windows ICO，无需额外图像依赖。修改源稿后重新生成并打包，界面、窗口和 EXE 图标保持一致。
+
 测试临时文件保留在系统临时目录用于排查，不自动清理。打包使用新时间戳目录，避免覆盖已有产物。
 
-桌面测试使用软件离屏渲染并等待 `paint` 后保存截图。Electron 44 隐藏窗口的 `capturePage` 在加上 `stayHidden` / `stayAwake` 后仍曾报 `UnknownVizError`，不要改回依赖隐藏 GPU 合成的截图方式。正常应用使用常规窗口与硬件加速；下次升级 Electron 时检查源码和打包产物测试是否均一次通过。
+桌面测试使用软件离屏渲染并等待非空 `paint` 后保存截图（首帧可能为空，须在超时内继续等待）。Electron 44 隐藏窗口的 `capturePage` 在加上 `stayHidden` / `stayAwake` 后仍曾报 `UnknownVizError`，不要改回依赖隐藏 GPU 合成的截图方式。正常应用使用常规窗口与硬件加速；下次升级 Electron 时检查源码和打包产物测试是否均一次通过、所有截图均可解码。

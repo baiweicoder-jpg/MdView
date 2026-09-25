@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64">
+  <title>MdView — 书页与阅读视线</title>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="#234F55"/>
+  <path d="M13 17c7-1 13 1 19 6v28c-6-5-12-7-19-6V17Z" fill="#F3F7F2"/>
+  <path d="M32 23c6-5 12-7 19-6v28c-7-1-13 1-19 6V23Z" fill="#88C8B7"/>
+  <path d="M43 17v8h8Z" fill="#E9C38C"/>
+  <path d="m22 29 10 11 10-11" fill="none" stroke="#234F55" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
