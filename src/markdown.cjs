@@ -1,0 +1,118 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const MarkdownIt = require('markdown-it');
+const hljs = require('highlight.js/lib/common');
+
+const MAX_DOCUMENT = 10 * 1024 * 1024;
+const MAX_IMAGES = 24 * 1024 * 1024;
+const imageTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.avif': 'image/avif', '.ico': 'image/x-icon' };
+const md = new MarkdownIt({
+  html: false,
+  linkify: true,
+  highlight(code, language) {
+    if (language && hljs.getLanguage(language)) {
+      return hljs.highlight(code, { language, ignoreIllegals: true }).value;
+    }
+    return ''; // The renderer escapes unknown/unlabelled languages.
+  }
+});
+const fence = md.renderer.rules.fence;
+for (const type of ['th_open', 'td_open']) {
+  md.renderer.rules[type] = (tokens, index, _options, _env, self) => {
+    const token = tokens[index];
+    const align = token.attrGet('style');
+    if (align) {
+      token.attrs = token.attrs.filter(([name]) => name !== 'style');
+      token.attrSet('class', `align-${align.split(':')[1]}`);
+    }
+    return self.renderToken(tokens, index, {});
+  };
+}
+md.renderer.rules.fence = (tokens, index, options, env, self) => {
+  const language = tokens[index].info.trim().split(/\s+/)[0] || 'text';
+  return `<section class="code-block"><div class="code-toolbar"><span>${md.utils.escapeHtml(language)}</span><button class="copy-code" type="button" aria-label="复制代码">复制</button></div>${fence(tokens, index, options, env, self)}</section>`;
+};
+
+async function readLimited(file, limit) {
+  const handle = await fs.open(file, 'r');
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new Error('请选择文件。');
+    if (stat.size > limit) throw new Error('文件过大，超出读取上限。');
+    const data = Buffer.alloc(stat.size + 1);
+    let offset = 0;
+    while (offset < data.length) {
+      const { bytesRead } = await handle.read(data, offset, data.length - offset, offset);
+      if (!bytesRead) break;
+      offset += bytesRead;
+    }
+    if (offset > limit) throw new Error('文件过大，超出读取上限。');
+    return data.subarray(0, offset);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function renderMarkdown(source, directory) {
+  const tokens = md.parse(source, {});
+  const headings = [];
+  const warnings = new Set();
+  const ids = new Set();
+  let imageBytes = 0;
+  const root = directory ? await fs.realpath(directory) : null;
+  const images = new Map();
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.type === 'heading_open') {
+      const inline = tokens[i + 1];
+      const title = (inline.children || []).map(child => child.type === 'image' ? child.content : child.type === 'text' || child.type === 'code_inline' ? child.content : '').join('') || '未命名章节';
+      const base = title.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-|-$/g, '') || 'section';
+      let id = base;
+      for (let suffix = 2; ids.has(id); suffix++) id = `${base}-${suffix}`;
+      ids.add(id);
+      token.attrSet('id', id);
+      headings.push({ id, title, level: Number(token.tag.slice(1)) });
+    }
+    for (const child of token.children || []) {
+      if (child.type !== 'image') continue;
+      const src = child.attrGet('src') || '';
+      if (!images.has(src)) {
+        let dataUrl = '';
+        try {
+          if (!root || /^[a-z][a-z\d+.-]*:/i.test(src) || /^[\\/]/.test(src)) throw new Error('仅加载文档目录内的相对路径图片');
+          const decoded = decodeURIComponent(src.split(/[?#]/)[0]);
+          const file = await fs.realpath(path.resolve(root, decoded));
+          const relative = path.relative(root, file);
+          if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error('图片位于文档目录之外');
+          const mime = imageTypes[path.extname(file).toLowerCase()];
+          if (!mime) throw new Error('图片格式暂不支持');
+          const data = await readLimited(file, MAX_IMAGES - imageBytes);
+          imageBytes += data.length;
+          dataUrl = `data:${mime};base64,${data.toString('base64')}`;
+        } catch {
+          warnings.add('部分图片未加载：首版支持文档目录内的 PNG、JPEG、GIF、WebP、BMP、AVIF、ICO，总计不超过 24 MB。');
+        }
+        images.set(src, dataUrl);
+      }
+      const image = images.get(src);
+      if (image) {
+        child.attrSet('src', image);
+        child.attrSet('loading', 'lazy');
+      } else {
+        child.type = 'text';
+        child.content = `[图片未加载：${child.content || '图片'}]`;
+      }
+    }
+  }
+  return { html: md.renderer.render(tokens, md.options, {}), headings, warnings: [...warnings] };
+}
+
+async function readDocument(file) {
+  if (typeof file !== 'string' || !/\.(md|markdown)$/i.test(file)) throw new Error('请选择 .md 或 .markdown 文件。');
+  const resolved = await fs.realpath(file);
+  const data = await readLimited(resolved, MAX_DOCUMENT);
+  const source = data.toString('utf8').replace(/^\uFEFF/, '');
+  return { ...await renderMarkdown(source, path.dirname(resolved)), name: path.basename(resolved), path: resolved, characters: source.length };
+}
+
+module.exports = { renderMarkdown, readDocument };

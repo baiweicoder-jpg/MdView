@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>MdView</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand"><span class="brand-icon">M<span>↓</span></span><strong>MdView</strong><span class="brand-label">阅读，让思路清晰</span></div>
+    <div class="tools">
+      <button id="open" class="primary" title="打开 Markdown（Ctrl+O）">＋ 打开文件</button>
+      <button id="reload" title="重新读取文件（Ctrl+R）">刷新</button>
+      <span class="divider"></span>
+      <label class="sr-only" for="theme">阅读主题</label>
+      <select id="theme" title="阅读主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option><option value="warm">暖纸</option></select>
+      <button id="font-down" aria-label="减小字号">A−</button><span id="font-size" aria-live="polite">16</span><button id="font-up" aria-label="增大字号">A＋</button>
+    </div>
+  </header>
+  <div class="workspace">
+    <aside id="sidebar">
+      <div class="sidebar-heading"><span>文档目录</span><span id="heading-count">0</span></div>
+      <nav id="outline" aria-label="文档目录"></nav>
+      <div class="sidebar-note"><span class="status-dot"></span>本地阅读 · 文件不上传<br><span>拖入 Markdown 即可打开</span></div>
+    </aside>
+    <main id="reader">
+      <div class="document-header"><div><div class="eyebrow">MARKDOWN READER</div><h1 id="file-name">准备阅读</h1><p id="file-path">打开一份文档，开始专注阅读。</p></div><button id="toggle-outline" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+B）">☰</button></div>
+      <div id="notice" role="status" hidden></div>
+      <article id="content" class="markdown" aria-label="Markdown 内容"></article>
+      <div class="end-mark">— 阅读到这里 —</div>
+    </main>
+  </div>
+  <footer><span id="document-status">就绪</span><span>UTF-8<span class="footer-separator">·</span>Markdown<span class="footer-separator">·</span><span id="theme-status">浅色</span></span></footer>
+  <div id="drop-overlay" hidden><div><strong>松开，开始阅读</strong><span>支持 .md / .markdown</span></div></div>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>

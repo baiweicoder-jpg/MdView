@@ -1,0 +1,22 @@
+{
+  "name": "mdview",
+  "productName": "MdView",
+  "version": "0.1.0",
+  "description": "Windows Markdown reader with syntax highlighting and reading themes",
+  "private": true,
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "node scripts/launch.cjs",
+    "test": "node --test test/markdown.test.cjs",
+    "test:desktop": "node scripts/launch.cjs --smoke-test",
+    "package": "node scripts/package.cjs"
+  },
+  "dependencies": {
+    "highlight.js": "11.12.0",
+    "markdown-it": "15.0.2"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.4.5"
+  }
+}
