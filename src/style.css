@@ -1,10 +1,10 @@
 :root {
   color-scheme: light;
-  --bg: #f7f9f8; --surface: #ffffff; --sidebar: #eef3f1; --text: #283b3f;
-  --muted: #576b65; --border: #dce6e1; --accent: #28685e; --accent-soft: #e6f0eb;
-  --heading: #244e50; --code: #f0f5f2; --code-bar: #e8efeb; --code-text: #344a49;
-  --keyword: #755281; --string: #376e59; --number: #956035; --comment: #597061;
-  --function: #326a85; --deletion: #a44f50; --reading-size: 16px;
+  --bg: #fcfcff; --surface: #ffffff; --sidebar: #f0f2f9; --text: #30384b;
+  --muted: #626e83; --border: #dfe3ef; --accent: #5064a4; --accent-soft: #edf0fb;
+  --heading: #344569; --code: #f3f5fb; --code-bar: #eaedf6; --code-text: #35435d;
+  --keyword: #7754a3; --string: #347268; --number: #9c6037; --comment: #5f6c82;
+  --function: #3e6795; --deletion: #ab4e64; --reading-size: 16px;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
