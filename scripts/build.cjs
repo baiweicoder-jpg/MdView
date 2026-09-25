@@ -1,0 +1,1 @@
+require('esbuild').buildSync({ entryPoints: ['src/rich-editor.js'], outfile: 'src/generated/rich-editor.js', bundle: true, platform: 'browser', format: 'iife', globalName: 'MdViewRich', minify: true });

@@ -1,5 +1,13 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('mdview', {
+  draft: payload => ipcRenderer.send('draft', payload),
+  save: payload => ipcRenderer.invoke('save', payload),
+  preview: payload => ipcRenderer.invoke('preview', payload),
+  onSaved: callback => ipcRenderer.on('saved', (_event, value) => callback(value)),
+  onBusy: callback => ipcRenderer.on('file-busy', (_event, value) => callback(value)),
+  onSaveRequest: callback => ipcRenderer.on('save-request', (_event, value) => callback(value)),
+  onToggleEdit: callback => ipcRenderer.on('toggle-edit', () => callback()),
+  onEditError: callback => ipcRenderer.on('edit-error', (_event, value) => callback(value)),
   open: () => ipcRenderer.invoke('open'),
   drop: file => ipcRenderer.invoke('drop', webUtils.getPathForFile(file)),
   reload: () => ipcRenderer.invoke('reload-document'),

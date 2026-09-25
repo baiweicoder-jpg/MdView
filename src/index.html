@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
   <title>MdView</title>
   <link rel="stylesheet" href="style.css">
+  <script src="generated/rich-editor.js" defer></script>
   <script src="renderer.js" defer></script>
 </head>
 <body>
@@ -14,6 +15,7 @@
     <div class="tools">
       <button id="open" class="primary" title="打开 Markdown（Ctrl+O）">＋ 打开文件</button>
       <button id="reload" title="重新读取文件（Ctrl+R）">刷新</button>
+      <button id="edit" title="直接编辑（Ctrl+E）">编辑</button><button id="save" title="保存（Ctrl+S）">保存</button><button id="save-as">另存为</button><span id="edit-status" role="status"></span>
       <span class="divider"></span>
       <label class="sr-only" for="theme">阅读主题</label>
       <select id="theme" title="阅读主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option><option value="warm">暖纸</option></select>
@@ -27,8 +29,13 @@
       <div class="sidebar-note"><span class="status-dot"></span>本地阅读 · 文件不上传<br><span>拖入 Markdown 即可打开</span></div>
     </aside>
     <main id="reader">
-      <div class="document-header"><div><div class="eyebrow">MARKDOWN READER</div><h1 id="file-name">准备阅读</h1><p id="file-path">打开一份文档，开始专注阅读。</p></div><button id="toggle-outline" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+B）">☰</button></div>
+      <div class="document-header"><div><div class="eyebrow">MARKDOWN READER</div><h1 id="file-name">准备阅读</h1><p id="file-path">打开一份文档，开始专注阅读。</p></div><button id="toggle-outline" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+Shift+B）">☰</button></div>
       <div id="notice" role="status" hidden></div>
+      <div id="editor-tools" hidden>
+        <div class="editor-actions"><select id="block-type" aria-label="段落样式"><option value="0">正文</option><option value="1">标题 1</option><option value="2">标题 2</option><option value="3">标题 3</option></select><button data-edit="toggleBold">加粗</button><button data-edit="toggleItalic">斜体</button><button data-edit="toggleBulletList">列表</button><button data-edit="toggleOrderedList">编号</button><button data-edit="toggleBlockquote">引用</button><button data-edit="toggleCodeBlock">代码块</button><button data-edit="table">表格</button><button data-edit="addRowAfter">加行</button><button data-edit="deleteTable">删表</button><button data-edit="undo">撤销</button><button data-edit="redo">重做</button></div>
+        <p class="editor-note">直接点击正文输入 · Ctrl+B 加粗 · Ctrl+S 保存 · 保存编辑后会规范化 Markdown 排版</p>
+      </div>
+      <article id="editor-content" class="markdown" hidden></article>
       <article id="content" class="markdown" aria-label="Markdown 内容"></article>
       <div class="end-mark">— 阅读到这里 —</div>
     </main>

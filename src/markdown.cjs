@@ -2,8 +2,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const MarkdownIt = require('markdown-it');
 const hljs = require('highlight.js/lib/common');
+const { readLimited, readTextFile } = require('./document-file.cjs');
 
-const MAX_DOCUMENT = 10 * 1024 * 1024;
 const MAX_IMAGES = 24 * 1024 * 1024;
 const imageTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.avif': 'image/avif', '.ico': 'image/x-icon' };
 const md = new MarkdownIt({
@@ -35,26 +35,6 @@ for (const type of ['fence', 'code_block']) {
   };
 }
 
-async function readLimited(file, limit) {
-  const handle = await fs.open(file, 'r');
-  try {
-    const stat = await handle.stat();
-    if (!stat.isFile()) throw new Error('请选择文件。');
-    if (stat.size > limit) throw new Error('文件过大，超出读取上限。');
-    const data = Buffer.alloc(stat.size + 1);
-    let offset = 0;
-    while (offset < data.length) {
-      const { bytesRead } = await handle.read(data, offset, data.length - offset, offset);
-      if (!bytesRead) break;
-      offset += bytesRead;
-    }
-    if (offset > limit) throw new Error('文件过大，超出读取上限。');
-    return data.subarray(0, offset);
-  } finally {
-    await handle.close();
-  }
-}
-
 async function renderMarkdown(source, directory) {
   const tokens = md.parse(source, {});
   const headings = [];
@@ -63,6 +43,7 @@ async function renderMarkdown(source, directory) {
   let imageBytes = 0;
   const root = directory ? await fs.realpath(directory) : null;
   const images = new Map();
+  const missingImages = [];
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     if (token.type === 'heading_open') {
@@ -78,6 +59,7 @@ async function renderMarkdown(source, directory) {
     for (const child of token.children || []) {
       if (child.type !== 'image') continue;
       const src = child.attrGet('src') || '';
+      child.attrSet('data-md-src', src);
       if (!images.has(src)) {
         let dataUrl = '';
         try {
@@ -101,20 +83,19 @@ async function renderMarkdown(source, directory) {
         child.attrSet('src', image);
         child.attrSet('loading', 'lazy');
       } else {
-        child.type = 'text';
-        child.content = `[图片未加载：${child.content || '图片'}]`;
+        child.attrSet('src', '');
+        missingImages.push(child);
       }
     }
   }
-  return { html: md.renderer.render(tokens, md.options, {}), headings, warnings: [...warnings] };
+  const editorHtml = md.renderer.render(tokens, md.options, {});
+  for (const child of missingImages) { child.type = 'text'; child.content = `[图片未加载：${child.content || '图片'}]`; }
+  return { editorHtml, assets: Object.fromEntries(images), html: md.renderer.render(tokens, md.options, {}), headings, warnings: [...warnings] };
 }
 
 async function readDocument(file) {
-  if (typeof file !== 'string' || !/\.(md|markdown)$/i.test(file)) throw new Error('请选择 .md 或 .markdown 文件。');
-  const resolved = await fs.realpath(file);
-  const data = await readLimited(resolved, MAX_DOCUMENT);
-  const source = data.toString('utf8').replace(/^\uFEFF/, '');
-  return { ...await renderMarkdown(source, path.dirname(resolved)), name: path.basename(resolved), path: resolved, characters: source.length };
+  const document = await readTextFile(file);
+  return { ...document, ...await renderMarkdown(document.source, path.dirname(document.path)), name: path.basename(document.path), characters: document.source.length };
 }
 
 module.exports = { renderMarkdown, readDocument };

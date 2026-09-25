@@ -123,3 +123,16 @@ footer { display: flex; align-items: center; justify-content: space-between; min
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 1050px) { .brand-label { display: none; } aside { width: 200px; } .toolbar { padding-left: 18px; padding-right: 18px; } }
 @media (prefers-reduced-motion: reduce) { main { scroll-behavior: auto; } }
+
+.editor-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+#editor-tools { position: sticky; top: 0; z-index: 3; background: var(--bg); padding: 12px 0; }
+.editor-note { font-size: 12px; opacity: .65; margin: 8px 0; }
+.ProseMirror { outline: none; min-height: 45vh; padding-bottom: 80px; }
+.ProseMirror:focus { caret-color: var(--accent); }
+.ProseMirror table { table-layout: fixed; width: 100%; }
+.ProseMirror td, .ProseMirror th { position: relative; min-width: 50px; }
+.ProseMirror td p, .ProseMirror th p { margin: 0; }
+.ProseMirror .selectedCell { background: var(--border); }
+#edit-status { font-size: 12px; color: var(--accent); white-space: nowrap; }
+.toolbar { flex-wrap: wrap; }
+.tools { flex-wrap: wrap; }

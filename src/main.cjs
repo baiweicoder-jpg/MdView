@@ -9,19 +9,23 @@ if (smoke) {
   app.disableHardwareAcceleration();
 }
 let win;
+let editSession;
 let currentFile;
 let requestNumber = 0;
 const page = pathToFileURL(path.join(__dirname, 'index.html')).href;
 const welcome = path.join(__dirname, '..', 'examples', '欢迎使用.md');
 
 async function openDocument(file, remember = true) {
+  return editSession.load(() => loadDocument(file, remember));
+}
+async function loadDocument(file, remember = true) {
   const request = ++requestNumber;
   try {
     const document = await readDocument(file);
     if (request !== requestNumber) return;
     currentFile = file;
     win.setTitle(`${document.name} — MdView`);
-    win.webContents.send('document', { ok: true, document });
+    win.webContents.send('document', { ok: true, document: editSession.accept(document) });
     if (remember && !smoke) app.addRecentDocument(file);
     return document;
   } catch (error) {
@@ -48,12 +52,13 @@ app.whenReady().then(async () => {
     backgroundColor: '#f6f7f9', show: !smoke,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, offscreen: smoke }
   });
+  editSession = require('./edit-session.cjs')(win, trusted, welcome);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   win.webContents.on('will-attach-webview', event => event.preventDefault());
   ipcMain.handle('open', event => { trusted(event); return chooseDocument(); });
   ipcMain.handle('drop', (event, file) => { trusted(event); return openDocument(file); });
-  ipcMain.handle('reload-document', event => { trusted(event); return openDocument(currentFile || welcome, false); });
+  ipcMain.handle('reload-document', event => { trusted(event); return openDocument(editSession.file || welcome, false); });
   ipcMain.handle('external', async (event, href) => {
     trusted(event);
     if (typeof href !== 'string' || href.length > 8192) return;
@@ -67,11 +72,14 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: '文件', submenu: [
       { label: '打开 Markdown…', accelerator: 'Ctrl+O', click: chooseDocument },
-      { label: '重新读取', accelerator: 'Ctrl+R', click: () => openDocument(currentFile || welcome, false) },
+      { label: '重新读取', accelerator: 'Ctrl+R', click: () => openDocument(editSession.file || welcome, false) },
+      { label: '保存', accelerator: 'Ctrl+S', click: () => win.webContents.send('save-request', false) },
+      { label: '另存为', accelerator: 'Ctrl+Shift+S', click: () => win.webContents.send('save-request', true) },
+      { label: '编辑 / 阅读', accelerator: 'Ctrl+E', click: () => win.webContents.send('toggle-edit') },
       { type: 'separator' }, { label: '退出', role: 'quit' }
     ] },
     { label: '查看', submenu: [
-      { label: '切换目录', accelerator: 'Ctrl+B', click: () => win.webContents.send('toggle-outline') },
+      { label: '切换目录', accelerator: 'Ctrl+Shift+B', click: () => win.webContents.send('toggle-outline') },
       { label: '全屏', role: 'togglefullscreen' }, { type: 'separator' },
       { label: '放大界面', role: 'zoomIn' }, { label: '缩小界面', role: 'zoomOut' }, { label: '重置缩放', role: 'resetZoom' }
     ] }
@@ -82,6 +90,7 @@ app.whenReady().then(async () => {
   if (smoke) {
     try {
       await require('../test/desktop-smoke.cjs')({ win, openDocument, app });
+      await require('../test/editor-smoke.cjs')({ win, openDocument, app });
       app.exit(0);
     } catch (error) {
       console.error(error);

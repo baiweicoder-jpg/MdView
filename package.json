@@ -8,16 +8,27 @@
   "scripts": {
     "icons": "node scripts/icons.cjs",
     "start": "node scripts/launch.cjs",
-    "test": "node --test test/markdown.test.cjs",
+    "test": "node --test test/markdown.test.cjs test/document-file.test.cjs",
     "test:desktop": "node scripts/launch.cjs --smoke-test",
-    "package": "node scripts/package.cjs"
+    "package": "node scripts/package.cjs",
+    "build": "node scripts/build.cjs",
+    "prestart": "npm run build",
+    "pretest:desktop": "npm run build",
+    "prepackage": "npm run build"
   },
   "dependencies": {
+    "@tiptap/core": "3.31.3",
+    "@tiptap/extension-image": "3.31.3",
+    "@tiptap/extension-table": "3.31.3",
+    "@tiptap/markdown": "3.31.3",
+    "@tiptap/pm": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
     "highlight.js": "11.12.0",
     "markdown-it": "15.0.2"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
-    "electron": "44.4.5"
+    "electron": "44.4.5",
+    "esbuild": "0.28.2"
   }
 }

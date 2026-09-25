@@ -84,7 +84,18 @@ $('#toggle-outline').addEventListener('click', toggleOutline);
 window.mdview.onToggleOutline(toggleOutline);
 let observer;
 let currentPath;
+let currentDocument;
+let richEditor;
+let editing = false;
+let fileBusy = false;
 window.mdview.onDocument(result => {
+  if (result.ok) {
+    richEditor?.destroy(); richEditor = null; editing = false;
+    currentDocument = result.document; setEditingUI();
+  }
+  renderDocument(result);
+});
+function renderDocument(result) {
   if (!result.ok) {
     $('#notice').textContent = result.message;
     $('#notice').hidden = false;
@@ -127,7 +138,7 @@ window.mdview.onDocument(result => {
   }, { root: reader, rootMargin: '0px 0px -65% 0px' });
   for (const heading of $('#content').querySelectorAll('h1,h2,h3,h4,h5,h6')) observer.observe(heading);
   reader.scrollTop = previousScroll;
-});
+}
 document.addEventListener('click', event => {
   const expand = event.target.closest('.expand-code');
   if (expand) { openCodeDialog(expand); return; }
@@ -150,12 +161,13 @@ document.addEventListener('click', event => {
   }
   const link = event.target.closest('a');
   if (!link) return;
+  if (link.closest('#editor-content')) { event.preventDefault(); return; }
   event.preventDefault();
   const href = link.getAttribute('href') || '';
   if (href.startsWith('#')) {
     try {
       const id = decodeURIComponent(href.slice(1));
-      const target = [...$('#content').querySelectorAll('[id]')].find(element => element.id === id);
+      const target = editing ? [...$('#editor-content').querySelectorAll('h1,h2,h3,h4,h5,h6')].find(element => element.textContent === link.textContent) : [...$('#content').querySelectorAll('[id]')].find(element => element.id === id);
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch { toast('无法定位此章节'); }
   } else if (/^https?:\/\//i.test(href)) perform(() => window.mdview.external(href));
@@ -182,3 +194,66 @@ document.addEventListener('drop', event => {
 });
 applyTheme();
 applyFont();
+
+function payload() { return { id: currentDocument.id, source: richEditor ? richEditor.source() : currentDocument.source }; }
+function setEditingUI() {
+  $('#editor-content').hidden = !editing;
+  $('#editor-tools').hidden = !editing;
+  $('#content').hidden = editing;
+  $('.end-mark').hidden = editing;
+  $('#edit').textContent = editing ? '完成编辑' : '编辑';
+  const dirty = currentDocument && payload().source !== currentDocument.source;
+  $('#edit-status').textContent = dirty ? '未保存' : editing ? '编辑中' : '';
+}
+function changed() { window.mdview.draft(payload()); setEditingUI(); }
+async function toggleEditing() {
+  if (!currentDocument || fileBusy) return;
+  if (codeDialog.open) codeDialog.close();
+  if (!richEditor) richEditor = MdViewRich.create($('#editor-content'), currentDocument, changed);
+  if (editing) {
+    const doc = await window.mdview.preview(payload());
+    renderDocument({ ok: true, document: doc });
+  }
+  editing = !editing; setEditingUI();
+  if (editing) richEditor.editor.commands.focus();
+}
+async function saveDocument(asNew = false) {
+  if (!currentDocument || fileBusy) return;
+  const result = await window.mdview.save({ ...payload(), asNew });
+  if (!result.ok && !result.canceled) { $('#notice').textContent = result.message; $('#notice').hidden = false; }
+}
+$('#edit').addEventListener('click', () => perform(toggleEditing));
+$('#save').addEventListener('click', () => perform(() => saveDocument()));
+$('#save-as').addEventListener('click', () => perform(() => saveDocument(true)));
+window.mdview.onToggleEdit(() => perform(toggleEditing));
+window.mdview.onSaveRequest(asNew => perform(() => saveDocument(asNew)));
+window.mdview.onEditError(message => { $('#notice').textContent = message; $('#notice').hidden = false; });
+window.mdview.onBusy(value => {
+  fileBusy = value;
+  richEditor?.editor.setEditable(!value, false);
+  for (const id of ['open', 'reload', 'edit', 'save', 'save-as']) $('#' + id).disabled = value;
+});
+window.addEventListener('beforeunload', event => {
+  if (currentDocument && payload().source !== currentDocument.source) { event.preventDefault(); event.returnValue = ''; }
+});
+window.mdview.onSaved(result => {
+  if (result.id !== currentDocument.id) return;
+  currentDocument = { ...currentDocument, ...result };
+  richEditor?.saved(result.snapshot, result.source);
+  $('#file-name').textContent = result.name;
+  $('#file-path').textContent = result.path;
+  $('#file-path').title = result.path;
+  setEditingUI(); toast('已保存');
+});
+$('#editor-tools').addEventListener('mousedown', event => { if (event.target.closest('button')) event.preventDefault(); });
+$('#editor-tools').addEventListener('click', event => {
+  const action = event.target.closest('[data-edit]')?.dataset.edit;
+  if (!action || !richEditor) return;
+  const chain = richEditor.editor.chain().focus();
+  if (action === 'table') chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  else chain[action]().run();
+});
+$('#block-type').addEventListener('change', event => {
+  const level = Number(event.target.value), chain = richEditor.editor.chain().focus();
+  if (level) chain.setHeading({ level }).run(); else chain.setParagraph().run();
+});

@@ -1,0 +1,61 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { dialog } = require('electron');
+module.exports = async ({ win, openDocument, app }) => {
+  const run = code => win.webContents.executeJavaScript(code, true);
+  await run("if (codeDialog.open) codeDialog.close()");
+  const dir = await fs.mkdtemp(path.join(app.getPath('temp'), 'mdview-edit-'));
+  const file = path.join(dir, 'edit.md');
+  const source = '# Title\n\nA **bold** paragraph.\n\n```js\nconst n = 1;\n```\n\n![missing](missing.png)\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n';
+  await fs.writeFile(file, source);
+  await openDocument(file);
+  await run('toggleEditing()');
+  assert.equal(await run('editing && !!richEditor.editor.view.dom.querySelector(".code-block .expand-code")'), true);
+  assert.equal(await run('payload().source'), source, 'entering editor preserves exact original source');
+  await run("richEditor.editor.commands.insertContentAt(1, 'Edited ')");
+  assert.match(await run('payload().source'), /Edited Title/);
+  assert.match(await run('payload().source'), /missing\.png/);
+  assert.equal(await run("!!$('#editor-content .hljs-keyword')"), true);
+  await run("$('#editor-content .expand-code').click()");
+  assert.equal(await run('codeDialog.open'), true);
+  await run("document.dispatchEvent(new WheelEvent('wheel', { ctrlKey:true, deltaY:-100, cancelable:true })); codeDialog.close()");
+  await run('saveDocument()');
+  assert.match(await fs.readFile(file, 'utf8'), /Edited Title/);
+  await run('toggleEditing()');
+  assert.match(await run("$('#content').textContent"), /Edited Title/);
+  await run('toggleEditing(); richEditor.editor.commands.insertContentAt(1, "Unsaved ")');
+  const originalDialog = dialog.showMessageBox;
+  dialog.showMessageBox = async () => ({ response: 2 });
+  try { await openDocument(file); assert.match(await run('payload().source'), /Unsaved/); }
+  finally { dialog.showMessageBox = originalDialog; }
+  await fs.writeFile(file, 'External change');
+  await run('saveDocument()');
+  assert.equal(await fs.readFile(file, 'utf8'), 'External change');
+  assert.match(await run("$('#notice').textContent"), /其他程序/);
+  const saveDialog = dialog.showSaveDialog;
+  const copied = path.join(dir, 'saved-as.md');
+  dialog.showSaveDialog = async () => ({ canceled: false, filePath: copied });
+  try { await run('saveDocument(true)'); }
+  finally { dialog.showSaveDialog = saveDialog; }
+  assert.match(await fs.readFile(copied, 'utf8'), /Unsaved/);
+  assert.equal(await run("$('#edit-status').textContent"), '编辑中');
+  await run('window.mdview.reload()');
+  assert.equal(await run('currentDocument.path'), copied);
+  await run('toggleEditing()');
+  await run("richEditor.editor.commands.insertContentAt(1, '中文输入 ')");
+  assert.match(await run('payload().source'), /中文输入/);
+  await run('richEditor.editor.commands.undo()');
+  assert.doesNotMatch(await run('payload().source'), /中文输入/);
+  assert.equal(await run('document.documentElement.scrollWidth <= innerWidth'), true);
+  const screenshot = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { win.webContents.off('paint', paint); reject(Error('Editor screenshot timed out')); }, 8000);
+    function paint(_event, _dirty, image) {
+      if (image.isEmpty()) { win.webContents.invalidate(); return; }
+      clearTimeout(timer); win.webContents.off('paint', paint); resolve(image);
+    }
+    win.webContents.on('paint', paint); win.webContents.invalidate();
+  });
+  await fs.writeFile(path.join(process.cwd(), 'artifacts', 'desktop', 'editor.png'), screenshot.toPNG());
+  console.log('Editor smoke: no-op fidelity, rich editing, image paths, code highlight/dialog/zoom, save, preview, cancel and conflict passed');
+};
