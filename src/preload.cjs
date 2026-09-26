@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('mdview', {
+  pasteImage: bytes => ipcRenderer.invoke('paste-image', bytes),
+  getLinkIcon: target => ipcRenderer.invoke('link-icon', target),
   getMenuBar: () => ipcRenderer.invoke('get-menu-bar'),
   popupMenu: (index, point) => ipcRenderer.invoke('popup-menu', index, point),
   quickAction: action => ipcRenderer.invoke('quick-action', action),

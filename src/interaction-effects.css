@@ -1,0 +1,79 @@
+/* Chrome-only depth. Load after component styles. No document/handle/popup
+   transforms, global button rules, layout changes, or new stacking contexts. */
+:root {
+  --interaction-edge: color-mix(in srgb, var(--surface) 78%, white);
+  --interaction-shade: color-mix(in srgb, var(--text) 13%, transparent);
+  --interaction-shadow: color-mix(in srgb, var(--text) 9%, transparent);
+  --interaction-raised: inset 0 1px 0 var(--interaction-edge),
+    0 1px 1px var(--interaction-shade), 0 3px 7px var(--interaction-shadow);
+  --interaction-inset: inset 0 1px 2px var(--interaction-shade),
+    inset 0 -1px 0 var(--interaction-edge);
+}
+:root[data-theme="dark"] {
+  --interaction-edge: color-mix(in srgb, var(--text) 12%, transparent);
+  --interaction-shade: #0005;
+  --interaction-shadow: #0003;
+}
+
+/* Light catches the existing pane edges; shadows do not consume any space. */
+#menu-bar { box-shadow: inset 0 1px 0 var(--interaction-edge); }
+#tab-bar { box-shadow: inset 0 1px 3px var(--interaction-shadow); }
+#sidebar { box-shadow: inset -1px 0 0 var(--interaction-edge); }
+#editor-tools { box-shadow: inset 1px 0 0 var(--interaction-edge); }
+#tab-bar .tab.active {
+  box-shadow: inset 0 1px 0 var(--interaction-edge), inset 0 2px 0 var(--border);
+}
+#opened-files-search { box-shadow: var(--interaction-inset); }
+
+/* Explicit chrome allowlist excludes editor content, native popup/listbox
+   options, context menus, image selection and resize controls. */
+:is(#menu-bar button, #tab-bar .tab, #tab-bar .tab-close,
+    #sidebar-tabs button, #opened-files-list .sidebar-file, #outline a,
+    #toggle-outline, #toggle-editor-tools, #editor-tools .format-grid button,
+    #editor-tools .paragraph-select-trigger, #editor-tools .color-control button,
+    #editor-tools .color-control input[type="color"]) {
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  /* Seated selected states retain the component's accent fill and borders. */
+  &:is([aria-pressed="true"], [aria-selected="true"], [aria-expanded="true"]):not(:disabled) {
+    box-shadow: var(--interaction-inset);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"],
+        [aria-busy="true"] *, [inert] *)):hover {
+      box-shadow: var(--interaction-raised);
+    }
+    &:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"],
+        [aria-busy="true"] *, [inert] *)):active {
+      box-shadow: var(--interaction-inset);
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    &:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"],
+        [aria-busy="true"] *, [inert] *)) {
+      transition: box-shadow 140ms ease-out;
+      /* Lift only the decorative face, never the original hit rectangle. */
+      > :is([data-icon], .tab-name) { transition: transform 140ms ease-out; }
+      &:hover > :is([data-icon], .tab-name) {
+        transform: perspective(400px) translate3d(0, -1px, 2px) rotateX(4deg);
+      }
+      &:active { transition-duration: 55ms; }
+      &:active > :is([data-icon], .tab-name) {
+        transform: perspective(400px) translate3d(0, 0, -1px);
+        transition-duration: 55ms;
+      }
+    }
+  }
+}
+
+/* Reduced-motion/coarse pointers receive stationary immediate states by
+   construction. No animation loops, will-change layers, or JS are needed. */
+@media (forced-colors: active) {
+  :is(#menu-bar, #tab-bar, #sidebar, #editor-tools, #opened-files-search,
+      #tab-bar .tab.active) { box-shadow: none; }
+}

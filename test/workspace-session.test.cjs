@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const modulePath = path.resolve(__dirname, '../src/workspace-session.cjs');
+require('./draft-session.test.cjs');
 
 test('restore skips bad files, keeps order and active path, deduplicates CLI and never writes documents', async () => {
   const { restoreWorkspace } = require(modulePath);
@@ -31,7 +32,7 @@ test('explicit CLI file wins even when restored session is at its tab bound', as
 
 test('bounded validation and corruption are safe; latest metadata wins', () => {
   const { createSessionStore, validateSession } = require(modulePath);
-  assert.equal(validateSession({ version: 2, tabs: [] }), null);
+  assert.equal(validateSession({ version: 3, tabs: [] }), null);
   assert.equal(validateSession({ version: 1, tabs: Array(101).fill({path:''}) }), null);
   const valid = validateSession({version:1,tabs:[{path:'relative.md'},{path:'',viewState:{scrollTop:-4,editing:'yes'}}],activeIndex:1});
   assert.deepEqual(valid.tabs, [{path:'',viewState:{scrollTop:0,editing:false}}]);

@@ -16,6 +16,18 @@ test('draft editor HTML uses restricted Markdown and inert image sources', () =>
   assert.equal((html.match(/<img src=""/g) || []).length, 2);
 });
 
+test('image widths are scoped, bounded and preserve inline text and image sources', () => {
+  const html = renderEditorHtml('before ![one](one.png "title"){width=240} ![two](two.png){width=96} after');
+  assert.match(html, /<p>before <img[^>]*width="240"[^>]*> <img[^>]*width="96"[^>]*> after<\/p>/);
+  assert.match(html, /data-md-src="one.png"/);
+  assert.doesNotMatch(html, /\{width=/);
+  for (const suffix of ['{width=0}', '{width=31}', '{width=1601}', '{width=0240}', '{width=20%}', '{width=240 onclick=evil}', ' {width=240}', '\\{width=240}']) {
+    assert.doesNotMatch(renderEditorHtml('![x](x.png)' + suffix), / width="/);
+  }
+  assert.match(renderEditorHtml('`![x](x.png){width=240}`'), /<code>!\[x\]\(x.png\)\{width=240\}<\/code>/);
+  assert.doesNotMatch(renderEditorHtml('<img src="x" width="240" onerror="evil">'), /<img/);
+});
+
 test('renders Markdown, highlighter, unique anchors and table alignment', async () => {
   const result = await renderMarkdown('# 标题\n\n## 标题\n\n## 标题-2\n\n**粗体**\n\n| 左 | 右 |\n| :-- | --: |\n| 1 | 2 |\n\n```js\nconst answer = 42;\n```\n\n```unknown\n<script>unsafe</script>\n```');
   assert.equal(new Set(result.headings.map(h => h.id)).size, 3);

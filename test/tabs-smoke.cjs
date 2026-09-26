@@ -70,10 +70,14 @@ module.exports = async ({ win, openDocument, app }) => {
   assert.match(await run('payload().source'), /Edited Alpha/, 'unsaved draft survives tab switch');
 
   // 新建 → 追加标签，不替换。
-  await run('window.mdview.newDocument()');
+  await run("document.querySelector('#tab-bar .tab.active .tab-name').dispatchEvent(new MouseEvent('dblclick', {bubbles:true, button:0}))");
+  assert.equal((await tabState()).length, baseline.length + 2, 'double-clicking an existing tab must not create a document');
+  await run("document.querySelector('#tab-bar').dispatchEvent(new MouseEvent('dblclick', {bubbles:true, button:0}))");
   await waitFor("document.querySelector('#file-name').textContent === '未命名.md'");
   tabs = await tabState();
   assert.equal(tabs.length, baseline.length + 3);
+  assert.equal(await run('editing'), true, 'double-click creates an editable document');
+  assert.equal(await run('richEditor.editor.getText()'), '', 'new document is empty');
   const unnamed = tabs.filter(t => t.name === '未命名.md');
   assert.ok(unnamed.length >= 1, 'new document adds an unnamed tab');
 

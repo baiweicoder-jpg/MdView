@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { app, dialog } = require('electron');
+process.on('uncaughtException', error => { console.error(error); app.exit(1); });
 // Test-only reload/teardown confirmation; async window-close prompts are tested below.
 dialog.showMessageBoxSync = () => 1;
 const dir = process.env.MDVIEW_SESSION_TEST_DIR;
@@ -23,6 +24,9 @@ app.on('browser-window-created', (_event, win) => {
 });
 (async () => {
   const { win, editSession, openDocument, sessionStore } = await require('../src/main.cjs');
+  win.showInactive();
+  const send = win.webContents.send.bind(win.webContents);
+  win.webContents.send = (channel, ...args) => { if (channel === 'edit-error') console.error('EDIT ERROR', ...args); return send(channel, ...args); };
   const run = code => win.webContents.executeJavaScript(code, true);
   const a = path.join(dir, 'a.md'), b = path.join(dir, 'b.md');
   const phase = process.env.MDVIEW_SESSION_PHASE;
@@ -37,6 +41,7 @@ app.on('browser-window-created', (_event, win) => {
     assert.fail(`${message}: ${JSON.stringify(await run('({path:currentDocument?.path,restoringView,visibility:document.visibilityState,ready:document.readyState})'))}`);
   }
   await waitFor(() => run('!!currentDocument && !restoringView'), 'initial renderer restoration settles');
+  assert.equal(await run('typeof window.mdviewPrepareClose'), 'function');
   if (phase === 'write') {
     await openDocument(a); await openDocument(b);
     const ids = await run('tabs.map(t=>({id:t.id,path:t.path}))');
@@ -52,7 +57,7 @@ app.on('browser-window-created', (_event, win) => {
     assert.equal(await run('reader.scrollTop'), 640, 'real editor scroll position set');
     await waitFor(() => editSession.snapshot().tabs.find(tab => tab.path === a).viewState.scrollTop === 640,
       'native scroll event reaches main workspace state');
-    await run(`window.mdview.draft({id:${aid},source:'DISCARDED SECRET'})`);
+    await run(`richEditor.editor.commands.insertContent('DISCARDED SECRET'); changed()`);
     await run('new Promise(r=>setTimeout(r,50))');
     dialog.showMessageBox = async () => ({response:2});
     win.close();
@@ -85,11 +90,12 @@ app.on('browser-window-created', (_event, win) => {
       assert.equal(await run('richEditor.editor.getText()'), '');
     } else if (phase === 'save') {
       await openDocument(a);
-      await run(`window.mdview.draft({id:currentDocument.id,source:'# Saved on exit'})`);
+      await waitFor(() => run('currentDocument.path === ' + JSON.stringify(a)), 'named save tab ready');
+      await run(`if (!editing) toggleEditing(); richEditor.editor.commands.setContent('# Saved on exit', {contentType:'markdown'}); changed();`);
       await run('new Promise(r=>setTimeout(r,50))');
       dialog.showMessageBox = async () => ({response:0});
       app.once('window-all-closed', () => {
-        assert.equal(fs.readFileSync(a,'utf8'), '# Saved on exit');
+        assert.equal(fs.readFileSync(a,'utf8'), '# Saved on exit\n\n');
         console.log('SESSION save PASS');
       });
       win.close(); return;
@@ -100,12 +106,12 @@ app.on('browser-window-created', (_event, win) => {
       assert.equal(result.ok,true);
       assert.deepEqual(editSession.snapshot().tabs.map(t=>t.path),['']);
       assert.equal(await run('currentDocument.path'),'');
-      assert.equal(fs.readFileSync(a,'utf8'),'# Saved on exit');
+      assert.equal(fs.readFileSync(a,'utf8'),'# Saved on exit\n\n');
     } else if (phase === 'closed') {
       assert.deepEqual(state.tabs.map(t=>t.path),['']);
       assert.equal(await run('currentDocument.source'),'');
     } else {
-      assert.equal(await run('currentDocument.source'), '# Saved on exit');
+      assert.equal(await run('currentDocument.source'), '# Saved on exit\n\n');
     }
     sessionStore.flush();
     app.once('window-all-closed', () => console.log(`SESSION ${phase} PASS`));

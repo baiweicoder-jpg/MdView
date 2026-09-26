@@ -1,0 +1,36 @@
+/* Only the paragraph-style selector; other native selects are unchanged. */
+.paragraph-select-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-width: 0; min-height: 36px; margin-bottom: 10px;
+  padding: 7px 11px; border-radius: 8px; text-align: left; font-size: 13px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+}
+.paragraph-select-trigger:hover:not(:disabled), .paragraph-select-trigger[aria-expanded="true"] {
+  background: var(--accent-soft); border-color: var(--muted);
+}
+.paragraph-select-trigger:focus-visible { outline-offset: 2px; }
+.paragraph-select-trigger:disabled { opacity: .45; }
+.paragraph-select-value, .paragraph-select-option-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paragraph-select-chevron { width: 7px; height: 7px; flex: 0 0 7px; margin: -3px 2px 0 0; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); }
+.paragraph-select-trigger[aria-expanded="true"] .paragraph-select-chevron { transform: rotate(225deg); margin-top: 4px; }
+.paragraph-select-menu {
+  position: fixed; inset: auto; margin: 0; padding: 5px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text);
+  box-shadow: 0 4px 10px #0000000d, 0 12px 28px #0000001a;
+  overflow: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  font: 13px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+.paragraph-select-menu::backdrop { background: transparent; pointer-events: none; }
+.paragraph-select-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 32px; padding: 6px 9px; border-radius: 6px; cursor: pointer; user-select: none;
+}
+.paragraph-select-option.is-active { background: var(--accent-soft); }
+.paragraph-select-option[aria-selected="true"] { font-weight: 600; }
+.paragraph-select-check { flex: 0 0 16px; text-align: center; color: var(--accent); visibility: hidden; }
+.paragraph-select-option[aria-selected="true"] .paragraph-select-check { visibility: visible; }
+.paragraph-select-option[aria-disabled="true"] { opacity: .4; cursor: default; }
+@media (forced-colors: active) {
+  .paragraph-select-option.is-active { outline: 1px solid Highlight; outline-offset: -1px; }
+}

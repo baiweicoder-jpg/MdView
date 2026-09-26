@@ -1,0 +1,31 @@
+.ProseMirror[contenteditable="true"] .editor-image.image-group-selected {
+  outline: 3px solid var(--accent, #5064a4);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px var(--accent-soft, #edf0fb);
+  border-radius: 6px;
+}
+/* Group gestures must not hit single-image controls covering a narrow image.
+   A normal click clears the group and restores the existing NodeView controls. */
+.ProseMirror .editor-image.image-group-selected .image-size-controls,
+.ProseMirror .editor-image.image-group-selected .image-resize-handles { display: none; }
+.image-group-menu {
+  position: fixed;
+  z-index: 1200;
+  width: 320px;
+  max-width: calc(100vw - 8px);
+  max-height: calc(100vh - 8px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border, #dfe3ef);
+  border-radius: 8px;
+  background: var(--surface, white);
+  color: var(--text, #30384b);
+  box-shadow: 0 6px 24px #0003;
+  font: 13px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+.image-group-menu p { margin: 0 0 8px; }
+.image-group-menu button { width: 100%; margin: 4px 0; }
+.image-group-menu label { display: grid; grid-template-columns: 1fr 100px; align-items: center; gap: 8px; margin: 8px 0; }
+.image-group-menu input { min-width: 0; width: 100%; border: 1px solid var(--border, #dfe3ef); border-radius: 4px; padding: 5px; color: inherit; background: var(--bg, white); font: inherit; }
+.image-group-menu .image-group-status { color: var(--muted, #626e83); font-size: 12px; overflow-wrap: anywhere; }
+.image-group-menu :focus-visible { outline: 2px solid var(--accent, #5064a4); outline-offset: 2px; }

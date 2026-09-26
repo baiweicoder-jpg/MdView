@@ -73,6 +73,8 @@ module.exports = app.whenReady().then(async () => {
     backgroundColor: '#f6f7f9', show: !smoke,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, offscreen: smoke }
   });
+  require('./image-paste.cjs').registerImagePaste(trusted);
+  require('./link-icons.cjs').install(win, trusted);
   const getSettings = await require('./settings.cjs')(win, trusted, language => { uiLanguage = language; buildMenu(); editSession?.refreshTitle(); });
   uiLanguage = getSettings().language;
   ipcMain.handle('get-i18n', event => { trusted(event); return { language: uiLanguage, english }; });
@@ -80,10 +82,10 @@ module.exports = app.whenReady().then(async () => {
   const sessionStore = createSessionStore(path.join(app.getPath('userData'), 'session.json'));
   const savedWorkspace = sessionStore.load();
   let workspaceReady = false;
-  editSession = require('./edit-session.cjs')(win, trusted, welcome, getSettings, state => { if (workspaceReady) sessionStore.save(state); });
-  // Flush synchronously after close is accepted, including destroy() after a discard prompt.
-  win.on('closed', () => sessionStore.flush());
-  app.on('will-quit', () => sessionStore.flush());
+  editSession = require('./edit-session.cjs')(win, trusted, welcome, getSettings,
+    state => workspaceReady && sessionStore.save(state),
+    state => workspaceReady && sessionStore.save(state) && sessionStore.flush());
+  // Recovery must be durable BEFORE destroy; a closed/will-quit flush cannot veto data loss.
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   win.webContents.on('will-attach-webview', event => event.preventDefault());
@@ -200,6 +202,7 @@ module.exports = app.whenReady().then(async () => {
     }
   });
   ipcMain.on('menu-state', (event, state) => {
+    if (win.isDestroyed()) return;
     trusted(event);
     if (!state || typeof state !== 'object') return;
     Object.assign(menuState, state);
@@ -212,7 +215,7 @@ module.exports = app.whenReady().then(async () => {
     try { workspace.documents.push(await readDocument(welcome)); }
     catch { workspace.documents.push({ path: '', viewState: { editing: true, scrollTop: 0 } }); }
   }
-  editSession.restore(workspace);
+  await editSession.restore(workspace);
   await win.loadFile(path.join(__dirname, 'index.html'));
   workspaceReady = true;
   editSession.present();
@@ -227,6 +230,7 @@ module.exports = app.whenReady().then(async () => {
       await require('../test/colors-smoke.cjs')({ win, openDocument, app });
       await require('../test/menu-bar-smoke.cjs')({ win, openDocument, app });
       await require('../test/sidebar-smoke.cjs')({ win, openDocument, app });
+      await require('../test/image-paste-smoke.cjs')({ win, app });
       app.exit(0);
     } catch (error) {
       console.error(error);

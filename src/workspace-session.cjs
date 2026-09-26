@@ -1,15 +1,16 @@
-// Metadata only: document contents and unsaved drafts never leave edit-session.
+// Version 2 stores untitled drafts only; named documents are always read from disk.
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const MAX_TABS = 100;
-const MAX_BYTES = 1024 * 1024;
+const { MAX_DOCUMENT } = require('./document-file.cjs');
+const MAX_BYTES = 64 * 1024 * 1024;
 const pathKey = file => process.platform === 'win32' ? path.resolve(file).toLowerCase() : path.resolve(file);
 function viewState(value) {
   return { scrollTop: Number.isFinite(value?.scrollTop) ? Math.max(0, Math.min(100000000, value.scrollTop)) : 0, editing: value?.editing === true };
 }
 function validateSession(value) {
-  if (!value || value.version !== 1 || !Array.isArray(value.tabs) || value.tabs.length > MAX_TABS) return null;
+  if (!value || ![1, 2].includes(value.version) || !Array.isArray(value.tabs) || value.tabs.length > MAX_TABS) return null;
   const tabs = [], seen = new Set();
   let activeIndex = 0;
   for (let index = 0; index < value.tabs.length; index++) {
@@ -22,12 +23,18 @@ function validateSession(value) {
     }
     if (key) seen.add(key);
     if (index === value.activeIndex) activeIndex = tabs.length;
-    tabs.push({ path: item.path, viewState: viewState(item.viewState) });
+    const tab = { path: item.path, viewState: viewState(item.viewState) };
+    if (value.version === 2 && !item.path) {
+      if (typeof item.source !== 'string' || Buffer.byteLength(item.source) > MAX_DOCUMENT) return null;
+      tab.source = item.source;
+    }
+    tabs.push(tab);
   }
-  return { version: 1, tabs, activeIndex };
+  const result = { version: value.version, tabs, activeIndex };
+  return Buffer.byteLength(JSON.stringify(result)) <= MAX_BYTES ? result : null;
 }
 function createSessionStore(file, { onError = error => console.warn('Workspace session:', error.message), delay = 150 } = {}) {
-  let pending = null, timer = null;
+  let pending = null, timer = null, invalid = false;
   function load() {
     try {
       if (fs.statSync(file).size > MAX_BYTES) return null;
@@ -36,6 +43,7 @@ function createSessionStore(file, { onError = error => console.warn('Workspace s
   }
   function flush() {
     clearTimeout(timer); timer = null;
+    if (invalid) return false;
     if (!pending) return true;
     const value = pending;
     const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
@@ -51,7 +59,8 @@ function createSessionStore(file, { onError = error => console.warn('Workspace s
   }
   function save(value) {
     const validated = validateSession(value);
-    if (!validated) return false;
+    invalid = !validated || (value.version === 2 && validated.tabs.length !== value.tabs.length);
+    if (invalid) { clearTimeout(timer); timer = null; onError(Error('Workspace recovery exceeds its bounds or contains invalid tabs.')); return false; }
     pending = validated;
     clearTimeout(timer);
     timer = setTimeout(flush, delay);
@@ -73,10 +82,12 @@ async function restoreWorkspace(value, initialFile, readDocument) {
       else {
         if (documents.length >= MAX_TABS) {
           if (!activate) return;
-          documents.pop(); // A requested CLI file takes priority over the last bounded restore slot.
+          const replace = documents.findLastIndex(doc => doc.path);
+          if (replace < 0) return; // Never evict an untitled recovery to make room for CLI input.
+          documents.splice(replace, 1);
         }
         index = documents.length;
-        documents.push(document ? { ...document, viewState: viewState(item.viewState) } : { path: '', viewState: viewState(item.viewState) });
+        documents.push(document ? { ...document, viewState: viewState(item.viewState) } : { path: '', source: item.source || '', viewState: viewState(item.viewState) });
       }
       if (activate) activeIndex = index;
     } catch { /* Missing, inaccessible, oversized and invalid UTF-8 files are skipped. */ }
@@ -85,4 +96,4 @@ async function restoreWorkspace(value, initialFile, readDocument) {
   if (initialFile) await append({ path: initialFile }, true);
   return { documents, activeIndex };
 }
-module.exports = { createSessionStore, restoreWorkspace, validateSession, viewState, pathKey, MAX_TABS };
+module.exports = { createSessionStore, restoreWorkspace, validateSession, viewState, pathKey, MAX_TABS, MAX_BYTES };

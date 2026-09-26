@@ -1,0 +1,24 @@
+.table-context-menu {
+  position: fixed; z-index: 2000; box-sizing: border-box;
+  width: 270px; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px); overflow: auto;
+  padding: 6px; border: 1px solid var(--border, #c6cbd4); border-radius: 8px;
+  background: var(--surface, Canvas); color: var(--text, CanvasText);
+  box-shadow: 0 6px 24px #0003; font: 13px/1.5 system-ui, sans-serif;
+}
+.table-context-menu button {
+  display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 4px;
+  text-align: left; font: inherit; color: inherit; background: transparent; cursor: pointer;
+}
+.table-context-menu button:hover, .table-context-menu button:focus-visible {
+  background: var(--hover, #3b82f626); outline: 2px solid transparent;
+}
+.table-context-menu button:disabled { opacity: .4; cursor: default; }
+.table-context-menu [data-table-action="deleteRow"], .table-context-menu [data-table-action="deleteColumn"] { color: #c43b3b; }
+.table-selection-help { margin: 3px 8px 7px; font-size: 12px; opacity: .75; }
+.ProseMirror td.selectedCell, .ProseMirror th.selectedCell { position: relative; }
+.ProseMirror .selectedCell::after {
+  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: #448aff38; box-shadow: inset 0 0 0 1px #448aff88;
+}
+[data-theme="dark"] .table-context-menu { background: var(--surface, #242830); color: var(--text, #eef0f4); border-color: var(--border, #49505c); }
+[data-theme="dark"] .table-context-menu [data-table-action^="delete"] { color: #ff9090; }

@@ -2,7 +2,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const MarkdownIt = require('markdown-it');
 const hljs = require('highlight.js/lib/common');
-const { readLimited, readTextFile } = require('./document-file.cjs');
+const { readLimited, readTextFile, MAX_DOCUMENT } = require('./document-file.cjs');
+const { validateEmbeddedPng } = require('./image-paste.cjs');
 
 const MAX_IMAGES = 24 * 1024 * 1024;
 const imageTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.avif': 'image/avif', '.ico': 'image/x-icon' };
@@ -15,6 +16,16 @@ const md = new MarkdownIt({
     }
     return ''; // The renderer escapes unknown/unlabelled languages.
   }
+});
+// A single bounded suffix immediately after an image; not arbitrary attributes/HTML.
+md.inline.ruler.before('text', 'image_width', (state, silent) => {
+  const image = state.tokens.at(-1);
+  if (state.pending || image?.type !== 'image' || image.attrGet('width')) return false;
+  const match = /^\{width=([1-9]\d{1,3})\}/.exec(state.src.slice(state.pos, state.posMax));
+  if (!match || Number(match[1]) < 32 || Number(match[1]) > 1600) return false;
+  if (!silent) image.attrSet('width', match[1]);
+  state.pos += match[0].length;
+  return true;
 });
 // Explicit inline syntax only; raw HTML remains disabled, including attributes on <u>.
 for (const [name, tag, open, close] of [['highlight', 'mark', '==', '=='], ['underline', 'u', '<u>', '</u>']]) {
@@ -130,6 +141,7 @@ for (const type of ['fence', 'code_block']) {
 }
 
 async function renderMarkdown(source, directory) {
+  if (typeof source !== 'string' || Buffer.byteLength(source, 'utf8') > MAX_DOCUMENT) throw new Error('文档超过 10 MB 上限。');
   const tokens = md.parse(source, {});
   const headings = [];
   const warnings = new Set();
@@ -157,6 +169,12 @@ async function renderMarkdown(source, directory) {
       if (!images.has(src)) {
         let dataUrl = '';
         try {
+          if (src.startsWith('data:')) {
+            const data = validateEmbeddedPng(src);
+            if (imageBytes + data.length > MAX_IMAGES) throw new Error('图片总大小超过 24 MB。');
+            imageBytes += data.length;
+            dataUrl = src;
+          } else {
           if (!root || /^[a-z][a-z\d+.-]*:/i.test(src) || /^[\\/]/.test(src)) throw new Error('仅加载文档目录内的相对路径图片');
           const decoded = decodeURIComponent(src.split(/[?#]/)[0]);
           const file = await fs.realpath(path.resolve(root, decoded));
@@ -167,8 +185,9 @@ async function renderMarkdown(source, directory) {
           const data = await readLimited(file, MAX_IMAGES - imageBytes);
           imageBytes += data.length;
           dataUrl = `data:${mime};base64,${data.toString('base64')}`;
+          }
         } catch {
-          warnings.add('部分图片未加载：首版支持文档目录内的 PNG、JPEG、GIF、WebP、BMP、AVIF、ICO，总计不超过 24 MB。');
+          warnings.add('部分图片未加载：支持文档目录内的 PNG、JPEG、GIF、WebP、BMP、AVIF、ICO，以及每张不超过 2 MB 的嵌入 PNG；总计不超过 24 MB。');
         }
         images.set(src, dataUrl);
       }

@@ -228,6 +228,12 @@ $('#tab-bar').addEventListener('click', event => {
     perform(() => switchToTab(id));
   }
 });
+$('#tab-bar').addEventListener('dblclick', event => {
+  if (event.target !== event.currentTarget || event.button !== 0 || fileBusy) return;
+  event.preventDefault();
+  rememberWorkspaceView();
+  perform(() => window.mdview.newDocument());
+});
 async function switchToTab(id) {
   if (fileBusy) return;
   rememberWorkspaceView();
@@ -249,6 +255,25 @@ window.mdview.onPreviousTabRequest(() => {
   if (index >= 0 && tabs.length > 1) perform(() => switchToTab(tabs[(index - 1 + tabs.length) % tabs.length].id));
 });
 function processDocument(result) {
+  if (result.ok && result.empty) {
+    ++viewGeneration; // Invalidate restoration callbacks belonging to the removed tab.
+    restoringView = false;
+    richEditor?.destroy(); richEditor = null;
+    currentDocument = displayedDocument = currentPath = null;
+    editing = false;
+    observer?.disconnect(); observer = null;
+    outlineRoot = outlineSignature = undefined;
+    outlineTargets.clear();
+    if (codeDialog.open) codeDialog.close();
+    for (const selector of ['#content', '#editor-content', '#outline', '#file-name', '#file-path', '#document-status']) $(selector).replaceChildren();
+    $('#file-name').title = $('#file-path').title = '';
+    $('#heading-count').textContent = '0';
+    $('#notice').textContent = t('没有打开的文档');
+    $('#notice').hidden = false;
+    reader.scrollTop = 0;
+    setEditingUI();
+    return;
+  }
   // An error only displays a notice; it must not cancel the current document's
   // pending restoration (which owns releasing restoringView).
   const generation = result.ok ? ++viewGeneration : viewGeneration;
@@ -297,31 +322,65 @@ function renderDocument(result) {
   $('#heading-count').textContent = doc.headings.length;
   $('#notice').textContent = doc.warnings.join(' ');
   $('#notice').hidden = !doc.warnings.length;
+  refreshOutline($('#content'), doc.headings);
+  reader.scrollTop = scrollByPath.get(doc.path) || 0;
+}
+
+let outlineRoot;
+let outlineSignature;
+let outlineTargets = new Map();
+function refreshOutline(root, headings) {
+  const elements = [...root.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+  if (!headings) {
+    const ids = new Set();
+    headings = elements.map(element => {
+      const title = element.textContent || '未命名章节';
+      const base = title.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-|-$/g, '') || 'section';
+      let id = base;
+      for (let suffix = 2; ids.has(id); suffix++) id = `${base}-${suffix}`;
+      ids.add(id);
+      return { id, title, level: Number(element.tagName.slice(1)) };
+    });
+  }
+  // Bind by occurrence, never by text: duplicate headings are distinct targets.
+  const nextTargets = new Map(headings.map((heading, index) => [heading.id, elements[index]]));
+  const signature = JSON.stringify(headings);
+  if (outlineRoot === root && outlineSignature === signature &&
+      [...nextTargets].every(([id, element]) => outlineTargets.get(id) === element)) return;
+  outlineRoot = root;
+  outlineSignature = signature;
+  outlineTargets = nextTargets;
+  $('#heading-count').textContent = headings.length;
+  if (displayedDocument) {
+    displayedDocument = { ...displayedDocument, headings };
+    updateDocumentStatus(displayedDocument);
+  }
   const outline = $('#outline');
+  const scrollTop = outline.scrollTop;
   outline.replaceChildren();
-  const baseLevel = Math.min(6, ...doc.headings.map(heading => heading.level));
-  for (const heading of doc.headings) {
+  const baseLevel = Math.min(6, ...headings.map(heading => heading.level));
+  for (const heading of headings) {
     const link = document.createElement('a');
     link.href = `#${encodeURIComponent(heading.id)}`;
     link.textContent = heading.title;
     link.title = heading.title;
     link.dataset.target = heading.id;
-    link.style.paddingLeft = `${16 + Math.min(3, heading.level - baseLevel) * 14}px`;
+    link.style.paddingLeft = `${16 + (heading.level - baseLevel) * 14}px`;
     outline.append(link);
   }
-  if (!doc.headings.length) outline.textContent = '这份文档没有标题';
+  if (!headings.length) outline.textContent = t('这份文档没有标题');
+  outline.scrollTop = scrollTop;
   observer?.disconnect();
   observer = new IntersectionObserver(entries => {
     const visible = entries.find(entry => entry.isIntersecting);
     if (!visible) return;
     for (const link of outline.querySelectorAll('a')) {
-      const active = link.dataset.target === visible.target.id;
+      const active = outlineTargets.get(link.dataset.target) === visible.target;
       link.classList.toggle('active', active);
       if (active) link.setAttribute('aria-current', 'location'); else link.removeAttribute('aria-current');
     }
   }, { root: reader, rootMargin: '0px 0px -65% 0px' });
-  for (const heading of $('#content').querySelectorAll('h1,h2,h3,h4,h5,h6')) observer.observe(heading);
-  reader.scrollTop = scrollByPath.get(doc.path) || 0;
+  for (const heading of elements) observer.observe(heading);
 }
 document.addEventListener('click', event => {
   const expand = event.target.closest('.expand-code');
@@ -351,7 +410,7 @@ document.addEventListener('click', event => {
   if (href.startsWith('#')) {
     try {
       const id = decodeURIComponent(href.slice(1));
-      const target = editing ? [...$('#editor-content').querySelectorAll('h1,h2,h3,h4,h5,h6')].find(element => element.textContent === link.textContent) : [...$('#content').querySelectorAll('[id]')].find(element => element.id === id);
+      const target = outlineTargets.get(id) || (!editing && [...$('#content').querySelectorAll('[id]')].find(element => element.id === id));
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch { toast('无法定位此章节'); }
   } else if (/^https?:\/\//i.test(href)) perform(() => window.mdview.external(href));
@@ -372,6 +431,9 @@ document.addEventListener('drop', event => {
   dragDepth = 0;
   $('#drop-overlay').hidden = true;
   const files = [...event.dataTransfer.files];
+  // Internal editor/text drags carry no OS files. Keep the navigation guard,
+  // but do not turn a successful image move into a file-type error toast.
+  if (!files.length) return;
   const file = files.find(item => /\.(md|markdown)$/i.test(item.name));
   if (file) perform(() => window.mdview.drop(file));
   else toast('请拖入 .md 或 .markdown 文件');
@@ -392,6 +454,7 @@ function setEditingUI() {
   $('#edit-status').textContent = dirty ? t('未保存') : editing ? t('编辑中') : '';
   $('#edit-status').classList.toggle('dirty', Boolean(dirty));
   syncEditorTools();
+  if (currentDocument) refreshOutline(editing ? $('#editor-content') : $('#content'), editing ? undefined : displayedDocument?.headings);
   rememberWorkspaceView();
 }
 function createRichEditor() {
@@ -409,6 +472,7 @@ function syncEditorTools() {
   }
   $('#block-type').disabled = fileBusy || !editing;
   $('#block-type').value = String(editor.isActive('heading') ? editor.getAttributes('heading').level : 0);
+  $('#block-type').dispatchEvent(new Event('paragraph-style-sync'));
 }
 function applyToolsPanel() {
   $('#editor-tools').classList.toggle('collapsed', toolsCollapsed);
@@ -429,7 +493,10 @@ async function toggleEditing() {
   if (codeDialog.open) codeDialog.close();
   if (!richEditor) createRichEditor();
   if (editing) {
-    const doc = await window.mdview.preview(payload());
+    const generation = viewGeneration, editor = richEditor, snapshot = payload();
+    const doc = await window.mdview.preview(snapshot);
+    // A tab switch/close or newer keystroke while IPC is in flight owns the view.
+    if (generation !== viewGeneration || editor !== richEditor || !editing || snapshot.source !== richEditor.source()) return;
     renderDocument({ ok: true, document: doc });
   }
   editing = !editing; setEditingUI();
@@ -450,6 +517,15 @@ window.mdview.onBusy(value => {
 
   syncEditorTools();
 });
+window.mdviewPrepareClose = () => {
+  fileBusy = true;
+  richEditor?.editor.setEditable(false, false);
+  return currentDocument ? {
+    ...payload(),
+    viewState: restoringView && currentDocument.viewState
+      ? currentDocument.viewState : { editing, scrollTop: reader.scrollTop }
+  } : null;
+};
 window.addEventListener('beforeunload', event => {
   rememberWorkspaceView();
   if (tabs.some(tab => tab.dirty) || (currentDocument && payload().source !== currentDocument.source)) { event.preventDefault(); event.returnValue = ''; }
@@ -474,6 +550,7 @@ $('#editor-tools').addEventListener('click', event => {
   else chain[action]().run();
 });
 $('#block-type').addEventListener('change', event => {
+  if (!richEditor || fileBusy || !editing) return;
   const level = Number(event.target.value), chain = richEditor.editor.chain().focus();
   if (level) chain.setHeading({ level }).run(); else chain.setParagraph().run();
 });

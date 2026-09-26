@@ -182,4 +182,6 @@ module.exports = async ({ win, openDocument, app }) => {
   assert.equal((await run('window.mdview.getSettings()')).saveDirectory, app.getPath('documents'));
   console.log('Editor smoke: editing, protected saves, editable new documents and persistent save directory passed');
   await require('./editor-layout-smoke.cjs')({ win, openDocument, app });
+  await require('./styled-select-smoke.cjs')({ win, openDocument, app });
+  await require('./paste-replace-smoke.cjs')({ win, outputDirectory: dir });
 };
