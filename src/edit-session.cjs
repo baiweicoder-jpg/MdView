@@ -2,8 +2,11 @@ const path = require('node:path');
 const { dialog, ipcMain } = require('electron');
 const { saveTextFile, readTextFile, MAX_DOCUMENT } = require('./document-file.cjs');
 const { renderMarkdown } = require('./markdown.cjs');
+const { translate } = require('./i18n.cjs');
 
 module.exports = function editingSession(win, trusted, welcome, getSettings) {
+  const t = key => translate(key, getSettings().language);
+  const displayName = tab => tab.document.path ? tab.document.name : t('未命名.md');
   const tabs = [];
   let active = null;
   let busy = false;
@@ -11,7 +14,7 @@ module.exports = function editingSession(win, trusted, welcome, getSettings) {
   const send = (channel, data) => { if (!win.isDestroyed()) win.webContents.send(channel, data); };
 
   const summary = () => tabs.map(tab => ({ id: tab.id, name: tab.document.name, path: tab.document.path, dirty: tab.dirty, active: tab === active }));
-  const refreshTitle = () => win.setTitle(`${active?.dirty ? '● ' : ''}${active?.document.name ?? 'MdView'} — MdView`);
+  const refreshTitle = () => win.setTitle(`${active?.dirty ? '● ' : ''}${active ? displayName(active) : 'MdView'} — MdView`);
   const pushTabs = () => { refreshTitle(); send('tabs', summary()); };
   const findById = id => tabs.find(tab => tab.id === id);
 
@@ -59,8 +62,8 @@ module.exports = function editingSession(win, trusted, welcome, getSettings) {
     const snapshot = tab.source;
     let target = tab.document.path, expectedHash = tab.document.fingerprint;
     if (asNew || !target || target === welcome) {
-      const name = !target ? tab.document.name : target === welcome ? '我的文档.md' : path.basename(target);
-      const result = await dialog.showSaveDialog(win, { title: '保存 Markdown', defaultPath: path.join(getSettings().saveDirectory, name), filters: [{ name: 'Markdown', extensions: ['md'] }] });
+      const name = !target ? displayName(tab) : target === welcome ? t('我的文档.md') : path.basename(target);
+      const result = await dialog.showSaveDialog(win, { title: t('保存 Markdown'), defaultPath: path.join(getSettings().saveDirectory, name), filters: [{ name: 'Markdown', extensions: ['md'] }] });
       if (result.canceled) return { ok: false, canceled: true };
       target = result.filePath;
       if (target === welcome) throw Error('请另选位置保存，保留内置欢迎文档。');
@@ -88,7 +91,7 @@ module.exports = function editingSession(win, trusted, welcome, getSettings) {
 
   async function confirmDirty(tab) {
     if (!tab.dirty) return true;
-    const { response } = await dialog.showMessageBox(win, { type: 'question', message: `「${tab.document.name}」有未保存的修改`, buttons: ['保存', '不保存', '取消'], defaultId: 2, cancelId: 2 });
+    const { response } = await dialog.showMessageBox(win, { type: 'question', message: t('「{name}」有未保存的修改').replace('{name}', displayName(tab)), buttons: ['保存', '不保存', '取消'].map(t), defaultId: 2, cancelId: 2 });
     if (response === 2) return false;
     if (response === 1) return true;
     return (await saveTab(tab, false)).ok && !tab.dirty;
@@ -140,11 +143,12 @@ module.exports = function editingSession(win, trusted, welcome, getSettings) {
     }
   });
   win.webContents.on('will-prevent-unload', event => {
-    const response = dialog.showMessageBoxSync(win, { type: 'question', message: '放弃未保存的修改并重新加载界面？', buttons: ['取消', '放弃修改'], defaultId: 0, cancelId: 0 });
+    const response = dialog.showMessageBoxSync(win, { type: 'question', message: t('放弃未保存的修改并重新加载界面？'), buttons: ['取消', '放弃修改'].map(t), defaultId: 0, cancelId: 0 });
     if (response === 1) { if (active) active.dirty = false; event.preventDefault(); }
   });
   return {
     get file() { return active?.document.path; },
+    refreshTitle,
     openDocument,
     newBlank,
     confirmLeaveActive,

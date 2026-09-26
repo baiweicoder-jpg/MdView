@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('mdview', {
   draft: payload => ipcRenderer.send('draft', payload),
+  menuState: state => ipcRenderer.send('menu-state', state),
+  onMenuAction: callback => ipcRenderer.on('menu-action', (_event, action, value) => callback(action, value)),
   save: payload => ipcRenderer.invoke('save', payload),
   preview: payload => ipcRenderer.invoke('preview', payload),
   onSaved: callback => ipcRenderer.on('saved', (_event, value) => callback(value)),
@@ -17,6 +19,9 @@ contextBridge.exposeInMainWorld('mdview', {
   onNextTabRequest: callback => ipcRenderer.on('next-tab-request', () => callback()),
   onPreviousTabRequest: callback => ipcRenderer.on('previous-tab-request', () => callback()),
   getSettings: () => ipcRenderer.invoke('get-settings'),
+  getI18n: () => ipcRenderer.invoke('get-i18n'),
+  setLanguage: language => ipcRenderer.invoke('set-language', language),
+  onLanguageChanged: callback => ipcRenderer.on('language-changed', (_event, language) => callback(language)),
   chooseSaveDirectory: () => ipcRenderer.invoke('choose-save-directory'),
   resetSaveDirectory: () => ipcRenderer.invoke('reset-save-directory'),
   drop: file => ipcRenderer.invoke('drop', webUtils.getPathForFile(file)),

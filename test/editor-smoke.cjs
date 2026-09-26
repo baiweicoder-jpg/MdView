@@ -5,18 +5,27 @@ const { dialog } = require('electron');
 module.exports = async ({ win, openDocument, app }) => {
   const run = code => win.webContents.executeJavaScript(code, true);
   await run("if (codeDialog.open) codeDialog.close()");
-  assert.equal(await run("!!$('#new svg') && !!$('#save svg') && !!$('#toggle-editor-tools svg')"), true, 'local icons render on primary controls');
-  await run("$('#more-actions').click()");
-  assert.equal(await run("$('#file-actions').matches(':popover-open')"), true);
-  assert.equal(await run("$('#save-as').checkVisibility() && $('#reload').checkVisibility()"), true);
-  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ESC' });
-  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'ESC' });
-  await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-  assert.equal(await run("$('#file-actions').matches(':popover-open')"), false);
-  await run("$('#view-options').click()");
-  assert.equal(await run("$('#view-panel').matches(':popover-open') && $('#theme').checkVisibility()"), true);
-  await run("$('#view-options').click()");
-  assert.equal(await run("$('.toolbar').getBoundingClientRect().height <= 64"), true, 'toolbar stays on one line in narrow window');
+  const { Menu } = require('electron');
+  const menu = Menu.getApplicationMenu();
+  const click = id => menu.getMenuItemById(id).click();
+  const settle = () => run('new Promise(resolve => setTimeout(resolve, 80))');
+  assert.equal(await run("!!$('.toolbar') || !!$('#file-actions') || !!$('#view-panel')"), false);
+  assert.equal(await run("$('#tab-bar').getBoundingClientRect().top"), 0);
+  assert.equal(await run("$('.workspace').getBoundingClientRect().top === $('#tab-bar').getBoundingClientRect().bottom"), true);
+  click('theme-dark'); await settle();
+  assert.equal(await run('document.documentElement.dataset.theme'), 'dark');
+  assert.equal(menu.getMenuItemById('theme-dark').checked, true);
+  click('theme-light'); await settle();
+  const fontBefore = await run('fontSize');
+  click('font-up'); await settle();
+  assert.equal(await run('fontSize'), fontBefore + 1);
+  click('font-down'); await settle();
+  assert.equal(await run('fontSize'), fontBefore);
+  click('edit-mode'); await settle();
+  assert.equal(await run('editing'), true);
+  assert.equal(menu.getMenuItemById('edit-mode').checked, true);
+  click('edit-mode'); await settle();
+  assert.equal(await run('editing'), false);
   const dir = await fs.mkdtemp(path.join(app.getPath('temp'), 'mdview-edit-'));
   const file = path.join(dir, 'edit.md');
   const source = '# Title\n\nA **bold** paragraph.\n\n```js\nconst n = 1;\n```\n\n![missing](missing.png)\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n';
@@ -131,7 +140,7 @@ module.exports = async ({ win, openDocument, app }) => {
   try { await run('saveDocument()'); }
   finally { dialog.showSaveDialog = saveDialog; }
   assert.equal(defaultPath, path.join(dir, '未命名.md'));
-  await run("$('#settings').click()");
+  menu.items.find(item => item.label === '设置').submenu.items[0].click();
   await run('new Promise(resolve => setTimeout(resolve, 50))');
   assert.equal(await run("$('#settings-dialog').open"), true);
   assert.equal(await run("$('#save-directory').textContent"), dir);

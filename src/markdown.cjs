@@ -16,6 +16,64 @@ const md = new MarkdownIt({
     return ''; // The renderer escapes unknown/unlabelled languages.
   }
 });
+// Explicit inline syntax only; raw HTML remains disabled, including attributes on <u>.
+for (const [name, tag, open, close] of [['highlight', 'mark', '==', '=='], ['underline', 'u', '<u>', '</u>']]) {
+  md.inline.ruler.before('emphasis', name, (state, silent) => {
+    const start = state.pos;
+    if (!state.src.startsWith(open, start) || state.level >= state.md.options.maxNesting) return false;
+    let end = start + open.length;
+    for (; end < state.posMax; end++) {
+      if (state.src[end] === '\n') return false;
+      if (state.src[end] === '\\') { end++; continue; }
+      if (state.src.startsWith(close, end)) break;
+    }
+    if (end >= state.posMax || end === start + open.length) return false;
+    if (!silent) {
+      state.push(`${name}_open`, tag, 1);
+      const previousMax = state.posMax;
+      state.pos = start + open.length;
+      state.posMax = end;
+      state.md.inline.tokenize(state);
+      state.posMax = previousMax;
+      state.push(`${name}_close`, tag, -1);
+    }
+    state.pos = end + close.length;
+    return true;
+  });
+}
+// Work on parsed list tokens, never source replacement (which would alter code).
+md.core.ruler.after('inline', 'task_lists', state => {
+  const lists = [];
+  const items = [];
+  for (let i = 0; i < state.tokens.length; i++) {
+    const token = state.tokens[i];
+    if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') lists.push(token);
+    if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') lists.pop();
+    if (token.type === 'list_item_open') items.push(token);
+    if (token.type === 'list_item_close') {
+      const item = items.pop();
+      if (item?.attrGet('data-type') === 'taskItem') token.meta = { task: true };
+    }
+    if (token.type !== 'inline' || state.tokens[i - 1]?.type !== 'paragraph_open' || state.tokens[i - 2] !== items.at(-1)) continue;
+    const marker = /^\[([ xX])\](?:[ \t]+|$)/.exec(token.content);
+    const list = lists.at(-1);
+    if (!marker || list?.type !== 'bullet_list_open') continue;
+    const checked = marker[1].toLowerCase() === 'x';
+    list.attrSet('data-type', 'taskList');
+    items.at(-1).attrSet('data-type', 'taskItem');
+    items.at(-1).attrSet('data-checked', String(checked));
+    token.content = token.content.slice(marker[0].length);
+    token.children = [];
+    state.md.inline.parse(token.content, state.md, state.env, token.children);
+  }
+});
+md.renderer.rules.list_item_open = (tokens, i, options, _env, self) => {
+  const token = tokens[i];
+  const opening = self.renderToken(tokens, i, options);
+  if (token.attrGet('data-type') !== 'taskItem') return opening;
+  return opening + `<label><input type="checkbox" disabled${token.attrGet('data-checked') === 'true' ? ' checked' : ''} aria-label="${md.utils.escapeHtml(tokens[i + 2]?.content || 'Task')}"></label><div>`;
+};
+md.renderer.rules.list_item_close = (tokens, i) => `${tokens[i].meta?.task ? '</div>' : ''}</li>\n`;
 for (const type of ['th_open', 'td_open']) {
   md.renderer.rules[type] = (tokens, index, _options, _env, self) => {
     const token = tokens[index];

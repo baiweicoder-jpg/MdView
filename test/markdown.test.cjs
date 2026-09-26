@@ -31,6 +31,30 @@ test('both fenced and indented code have independent zoom and copy controls', as
   assert.match(result.html, /&lt;script&gt;plain text&lt;\/script&gt;/);
 });
 
+test('scoped highlight and underline preserve formatting but never enable arbitrary HTML', async () => {
+  const result = await renderMarkdown('==hello **bold**== <u>safe *text*</u>\n\n`==literal== <u>code</u>`\n\n<u onclick="evil()">bad</u> <script>bad</script>\n\n\\==escaped==');
+  assert.match(result.html, /<mark>hello <strong>bold<\/strong><\/mark>/);
+  assert.match(result.html, /<u>safe <em>text<\/em><\/u>/);
+  assert.match(result.html, /<code>==literal== &lt;u&gt;code&lt;\/u&gt;<\/code>/);
+  assert.doesNotMatch(result.html, /<u onclick|<script/);
+});
+
+test('task checkboxes preserve nested and mixed list structure without enabling input HTML', async () => {
+  const result = await renderMarkdown('- [ ] Todo\n- [X] Done\n  - [x] Nested\n- Plain\n\n<input type="checkbox" checked>');
+  assert.equal((result.html.match(/data-type="taskItem"/g) || []).length, 3);
+  assert.equal((result.html.match(/data-checked="true"/g) || []).length, 2);
+  assert.equal((result.html.match(/type="checkbox" disabled/g) || []).length, 3);
+  assert.match(result.editorHtml, /data-type="taskList"/);
+  assert.match(result.html, /<li>Plain<\/li>/);
+  assert.match(result.html, /&lt;input/);
+});
+
+test('scoped marks leave escapes and multiline delimiters literal', async () => {
+  const result = await renderMarkdown(String.raw`==one\==two==` + '\n\n==line\nbreak==\n\n<u>line\nbreak</u>');
+  assert.match(result.html, /<mark>one==two<\/mark>/);
+  assert.doesNotMatch(result.html, /<mark>line|<u>line/);
+});
+
 test('loads Unicode and space paths, bounds image access and document size', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mdview-test-'));
   // Fixtures are deliberately retained in the OS temporary directory for inspection.

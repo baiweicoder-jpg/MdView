@@ -1,4 +1,61 @@
 const $ = selector => document.querySelector(selector);
+let uiLanguage = 'zh-CN';
+let english = {};
+let reverseTranslations = {};
+const chromeTranslations = new WeakMap();
+function t(key, values = {}) {
+  const template = uiLanguage === 'en' ? (english[key] || key) : key;
+  return template.replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
+}
+function translateChrome(root = document.body) {
+  for (const option of root.querySelectorAll('select.code-language option[value=""]')) option.textContent = t('纯文本');
+  // Never walk document text, headings, filenames, paths or editable content.
+  const protectedSelector = '#content, #editor-content, #outline a, #file-name, #file-path, #save-directory, .tab-name, .code-language, pre, code';
+  const translateText = (node, attribute, value) => {
+    const cached = chromeTranslations.get(node) || {};
+    const previous = cached[attribute];
+    const key = previous?.rendered === value ? previous.key : (reverseTranslations[value.trim()] || value.trim());
+    const rendered = value.replace(value.trim(), t(key));
+    cached[attribute] = { key, rendered };
+    chromeTranslations.set(node, cached);
+    return rendered;
+  };
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode, parent = node.parentElement;
+    if (!parent || (parent.closest(protectedSelector) && !parent.closest('.code-toolbar'))) continue;
+    if (parent.closest('.code-language')) continue;
+    const value = translateText(node, 'text', node.nodeValue);
+    if (value !== node.nodeValue) node.nodeValue = value;
+  }
+  for (const element of root.querySelectorAll('[title], [aria-label]')) {
+    if (element.closest(protectedSelector) && !element.closest('.code-toolbar')) continue;
+    for (const attribute of ['title', 'aria-label']) {
+      if (!element.hasAttribute(attribute)) continue;
+      const value = element.getAttribute(attribute), translated = translateText(element, attribute, value);
+      if (value !== translated) element.setAttribute(attribute, translated);
+    }
+  }
+}
+function applyLanguage(language) {
+  uiLanguage = language === 'en' ? 'en' : 'zh-CN';
+  document.documentElement.lang = uiLanguage;
+  $('#ui-language').value = uiLanguage;
+  translateChrome();
+  if (currentDocument) {
+    $('#file-name').textContent = currentDocument.path ? currentDocument.name : t('未命名.md');
+    if (!currentDocument.path) $('#file-path').textContent = t('尚未保存 · Ctrl+S 选择文件名并保存');
+  }
+  if (displayedDocument) updateDocumentStatus(displayedDocument);
+  renderTabs();
+  setEditingUI();
+  applyTheme();
+  if (codeDialog.open) $('#code-dialog-title').textContent = t('单独查看 · {language}', { language: codeDialog.querySelector('.code-language').textContent });
+}
+async function changeLanguage(language) {
+  try { const settings = await window.mdview.setLanguage(language); applyLanguage(settings.language); }
+  catch { $('#ui-language').value = uiLanguage; toast(t('无法保存设置，请检查文件夹权限后重试。')); }
+}
 const reader = $('#reader');
 const codeDialog = $('#code-dialog');
 let codeDialogTrigger;
@@ -16,14 +73,16 @@ function applyTheme() {
   const selected = $('#theme').value;
   const theme = selected === 'system' ? (media.matches ? 'dark' : 'light') : selected;
   document.documentElement.dataset.theme = theme;
-  $('#theme-status').textContent = themeNames[theme];
+  $('#theme-status').textContent = t(themeNames[theme]);
   savePreferences();
+  window.mdview.menuState({ theme: selected });
 }
 function applyFont() {
   document.documentElement.style.setProperty('--reading-size', `${fontSize}px`);
   $('#font-size').textContent = fontSize;
   $('#font-down').disabled = fontSize <= 13;
   $('#font-up').disabled = fontSize >= 24;
+  window.mdview.menuState({ fontSize });
   savePreferences();
 }
 function changeFont(delta) {
@@ -41,7 +100,14 @@ function changeCodeZoom(block, direction) {
 function openCodeDialog(button) {
   const clone = button.closest('.code-block').cloneNode(true);
   clone.querySelector('.expand-code').remove();
-  $('#code-dialog-title').textContent = `单独查看 · ${clone.querySelector('.code-language').textContent}`;
+  const selector = button.closest('.code-block').querySelector('select.code-language');
+  if (selector) {
+    const label = document.createElement('span');
+    label.className = 'code-language';
+    label.textContent = selector.value || 'text';
+    clone.querySelector('.code-language').replaceWith(label);
+  }
+  $('#code-dialog-title').textContent = t('单独查看 · {language}', { language: clone.querySelector('.code-language').textContent });
   $('#code-dialog-content').replaceChildren(clone);
   $('#code-dialog-status').textContent = '';
   codeDialogTrigger = button;
@@ -55,7 +121,7 @@ codeDialog.addEventListener('close', () => {
 });
 let toastTimer;
 function toast(message) {
-  $('#toast').textContent = message;
+  $('#toast').textContent = t(message);
   $('#toast').hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 2300);
@@ -75,14 +141,19 @@ document.addEventListener('wheel', event => {
   if (codeDialog.open) changeCodeZoom(codeDialog.querySelector('.code-block'), direction);
   else changeFont(direction);
 }, { passive: false });
-$('#open').addEventListener('click', () => perform(() => window.mdview.open()));
-$('#new').addEventListener('click', () => perform(() => window.mdview.newDocument()));
-$('#settings').addEventListener('click', () => perform(async () => {
+async function openSettings() {
   const settings = await window.mdview.getSettings();
   $('#save-directory').textContent = settings.saveDirectory;
   $('#settings-error').hidden = true;
-  $('#settings-dialog').showModal();
-}));
+  if (!$('#settings-dialog').open) $('#settings-dialog').showModal();
+}
+window.mdview.onMenuAction((action, value) => {
+  if (action === 'settings') perform(openSettings);
+  else if (action === 'language') perform(() => changeLanguage(value));
+  else if (action === 'theme' && ['system', 'light', 'dark', 'warm'].includes(value)) { $('#theme').value = value; applyTheme(); }
+  else if (action === 'font') changeFont(value);
+  else if (action === 'font-reset') { fontSize = 16; applyFont(); }
+});
 $('#close-settings').addEventListener('click', () => $('#settings-dialog').close());
 async function changeSaveDirectory(reset) {
   $('#choose-save-directory').disabled = $('#reset-save-directory').disabled = true;
@@ -97,10 +168,7 @@ async function changeSaveDirectory(reset) {
 }
 $('#choose-save-directory').addEventListener('click', () => changeSaveDirectory(false));
 $('#reset-save-directory').addEventListener('click', () => changeSaveDirectory(true));
-$('#reload').addEventListener('click', () => perform(() => window.mdview.reload()));
-$('#file-actions').addEventListener('click', event => {
-  if (event.target.closest('button:not(:disabled)')) $('#file-actions').hidePopover();
-});
+
 function toggleOutline() {
   const hidden = document.body.classList.toggle('outline-hidden');
   $('#toggle-outline').setAttribute('aria-expanded', String(!hidden));
@@ -110,6 +178,10 @@ window.mdview.onToggleOutline(toggleOutline);
 let observer;
 let currentPath;
 let currentDocument;
+let displayedDocument;
+function updateDocumentStatus(doc) {
+  $('#document-status').textContent = t('{characters} 字符 · {headings} 个章节', { characters: doc.characters.toLocaleString(uiLanguage), headings: doc.headings.length });
+}
 let richEditor;
 let editing = false;
 let fileBusy = false;
@@ -128,11 +200,11 @@ function renderTabs() {
     item.title = tab.path || tab.name;
     const name = document.createElement('span');
     name.className = 'tab-name';
-    name.textContent = tab.name;
+    name.textContent = tab.path ? tab.name : t('未命名.md');
     const close = document.createElement('button');
     close.className = 'tab-close';
     close.type = 'button';
-    close.setAttribute('aria-label', `关闭 ${tab.name}`);
+    close.setAttribute('aria-label', t('关闭 {name}', { name: name.textContent }));
     close.textContent = '×';
     item.append(name, close);
     bar.append(item);
@@ -187,16 +259,16 @@ function renderDocument(result) {
     return;
   }
   const doc = result.document;
+  displayedDocument = doc;
   if (codeDialog.open) codeDialog.close();
   if (currentPath && currentPath !== doc.path) scrollByPath.set(currentPath, reader.scrollTop);
   currentPath = doc.path;
   $('#content').innerHTML = doc.html;
-  $('#file-name').textContent = doc.name;
-  $('#toolbar-file-name').textContent = doc.name;
-  $('#toolbar-file-name').title = doc.path || doc.name;
-  $('#file-path').textContent = doc.path || '尚未保存 · Ctrl+S 选择文件名并保存';
+  $('#file-name').textContent = doc.path ? doc.name : t('未命名.md');
+
+  $('#file-path').textContent = doc.path || t('尚未保存 · Ctrl+S 选择文件名并保存');
   $('#file-path').title = doc.path;
-  $('#document-status').textContent = `${doc.characters.toLocaleString()} 字符 · ${doc.headings.length} 个章节`;
+  updateDocumentStatus(doc);
   $('#heading-count').textContent = doc.headings.length;
   $('#notice').textContent = doc.warnings.join(' ');
   $('#notice').hidden = !doc.warnings.length;
@@ -290,10 +362,9 @@ function setEditingUI() {
   $('#editor-tools').hidden = !editing;
   $('#content').hidden = editing;
   $('.end-mark').hidden = editing;
-  $('#edit-label').textContent = editing ? '完成编辑' : '编辑';
-  $('#edit').setAttribute('aria-pressed', String(editing));
+  window.mdview.menuState({ editing });
   const dirty = currentDocument && payload().source !== currentDocument.source;
-  $('#edit-status').textContent = dirty ? '未保存' : editing ? '编辑中' : '';
+  $('#edit-status').textContent = dirty ? t('未保存') : editing ? t('编辑中') : '';
   $('#edit-status').classList.toggle('dirty', Boolean(dirty));
   syncEditorTools();
 }
@@ -304,7 +375,7 @@ function createRichEditor() {
 function syncEditorTools() {
   if (!richEditor) return;
   const editor = richEditor.editor;
-  const activeTypes = { toggleBold: 'bold', toggleItalic: 'italic', toggleBulletList: 'bulletList', toggleOrderedList: 'orderedList', toggleBlockquote: 'blockquote', toggleCodeBlock: 'codeBlock' };
+  const activeTypes = { toggleBold: 'bold', toggleItalic: 'italic', toggleStrike: 'strike', toggleUnderline: 'underline', toggleHighlight: 'highlight', toggleCode: 'code', toggleTaskList: 'taskList', toggleBulletList: 'bulletList', toggleOrderedList: 'orderedList', toggleBlockquote: 'blockquote', toggleCodeBlock: 'codeBlock' };
   for (const button of $('#editor-tools').querySelectorAll('[data-edit]')) {
     const action = button.dataset.edit;
     if (activeTypes[action]) button.setAttribute('aria-pressed', String(editor.isActive(activeTypes[action])));
@@ -317,7 +388,7 @@ function applyToolsPanel() {
   $('#editor-tools').classList.toggle('collapsed', toolsCollapsed);
   $('#editor-panel-body').hidden = toolsCollapsed;
   $('#toggle-editor-tools').setAttribute('aria-expanded', String(!toolsCollapsed));
-  const label = toolsCollapsed ? '展开格式面板' : '折叠格式面板';
+  const label = t(toolsCollapsed ? '展开格式面板' : '折叠格式面板');
   $('#toggle-editor-tools').setAttribute('aria-label', label);
   $('#toggle-editor-tools').title = label;
 }
@@ -343,16 +414,14 @@ async function saveDocument(asNew = false) {
   const result = await window.mdview.save({ ...payload(), asNew });
   if (!result.ok && !result.canceled) { $('#notice').textContent = result.message; $('#notice').hidden = false; }
 }
-$('#edit').addEventListener('click', () => perform(toggleEditing));
-$('#save').addEventListener('click', () => perform(() => saveDocument()));
-$('#save-as').addEventListener('click', () => perform(() => saveDocument(true)));
+
 window.mdview.onToggleEdit(() => perform(toggleEditing));
 window.mdview.onSaveRequest(asNew => perform(() => saveDocument(asNew)));
 window.mdview.onEditError(message => { $('#notice').textContent = message; $('#notice').hidden = false; });
 window.mdview.onBusy(value => {
   fileBusy = value;
   richEditor?.editor.setEditable(!value, false);
-  for (const id of ['new', 'open', 'reload', 'edit', 'save', 'save-as']) $('#' + id).disabled = value;
+
   syncEditorTools();
 });
 window.addEventListener('beforeunload', event => {
@@ -363,8 +432,7 @@ window.mdview.onSaved(result => {
   currentDocument = { ...currentDocument, ...result };
   richEditor?.saved(result.snapshot, result.source);
   $('#file-name').textContent = result.name;
-  $('#toolbar-file-name').textContent = result.name;
-  $('#toolbar-file-name').title = result.path;
+
   $('#file-path').textContent = result.path;
   $('#file-path').title = result.path;
   setEditingUI(); toast('已保存');
@@ -381,3 +449,34 @@ $('#block-type').addEventListener('change', event => {
   const level = Number(event.target.value), chain = richEditor.editor.chain().focus();
   if (level) chain.setHeading({ level }).run(); else chain.setParagraph().run();
 });
+
+// Keep HTML and editor source untouched: add a native select using the existing settings layout.
+const languageRow = document.createElement('label');
+languageRow.className = 'view-row';
+languageRow.htmlFor = 'ui-language';
+const languageLabel = document.createElement('span');
+languageLabel.textContent = '界面语言';
+const languageSelect = document.createElement('select');
+languageSelect.id = 'ui-language';
+for (const [value, label] of [['zh-CN', '简体中文'], ['en', 'English']]) {
+  const option = document.createElement('option');
+  option.value = value; option.textContent = label; languageSelect.append(option);
+}
+languageRow.append(languageLabel, languageSelect);
+$('#settings-dialog > header').after(languageRow);
+languageSelect.addEventListener('change', () => changeLanguage(languageSelect.value));
+window.mdview.onLanguageChanged(applyLanguage);
+window.mdview.getI18n().then(resources => {
+  english = resources.english;
+  reverseTranslations = Object.fromEntries(Object.entries(english).map(([key, value]) => [value, key]));
+  applyLanguage(resources.language);
+  // Dynamic notices, copy feedback and newly rendered code controls use the same catalog.
+  const chromeObserver = new MutationObserver(records => {
+    if (records.every(record => (record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement)?.closest('#editor-content, #outline a, pre, code'))) return;
+    chromeObserver.disconnect();
+    translateChrome();
+    observe();
+  });
+  function observe() { chromeObserver.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['title', 'aria-label'] }); }
+  observe();
+}).catch(() => toast('操作未完成，请重试。'));

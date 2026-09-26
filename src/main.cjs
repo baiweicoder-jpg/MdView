@@ -2,6 +2,9 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell, session } = require('e
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { readDocument } = require('./markdown.cjs');
+const { english, translate } = require('./i18n.cjs');
+let uiLanguage = 'zh-CN';
+const t = text => translate(text, uiLanguage);
 
 const smoke = process.argv.includes('--smoke-test');
 const portableDirectory = app.isPackaged && process.env.PORTABLE_EXECUTABLE_DIR;
@@ -49,7 +52,7 @@ async function reloadDocument() {
 }
 
 async function chooseDocument() {
-  const result = await dialog.showOpenDialog(win, { title: '打开 Markdown', properties: ['openFile'], filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }] });
+  const result = await dialog.showOpenDialog(win, { title: t('打开 Markdown'), properties: ['openFile'], filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }] });
   if (!result.canceled) await openDocument(result.filePaths[0]);
 }
 
@@ -70,7 +73,9 @@ app.whenReady().then(async () => {
     backgroundColor: '#f6f7f9', show: !smoke,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, offscreen: smoke }
   });
-  const getSettings = await require('./settings.cjs')(win, trusted);
+  const getSettings = await require('./settings.cjs')(win, trusted, language => { uiLanguage = language; buildMenu(); editSession?.refreshTitle(); });
+  uiLanguage = getSettings().language;
+  ipcMain.handle('get-i18n', event => { trusted(event); return { language: uiLanguage, english }; });
   editSession = require('./edit-session.cjs')(win, trusted, welcome, getSettings);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
@@ -89,26 +94,67 @@ app.whenReady().then(async () => {
     trusted(event);
     if (typeof text === 'string' && text.length <= 10 * 1024 * 1024) require('electron').clipboard.writeText(text);
   });
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
+  const menuState = {};
+  function localizeMenu(items) {
+    return items.map(item => ({ ...item, ...(item.label ? { label: t(item.label) } : {}), ...(Array.isArray(item.submenu) ? { submenu: localizeMenu(item.submenu) } : {}) }));
+  }
+  function buildMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate(localizeMenu([
     { label: '文件', submenu: [
       { label: '新建空白文档', accelerator: 'Ctrl+N', click: newDocument },
       { label: '打开 Markdown…', accelerator: 'Ctrl+O', click: chooseDocument },
       { label: '重新读取', accelerator: 'Ctrl+R', click: () => reloadDocument() },
       { label: '保存', accelerator: 'Ctrl+S', click: () => win.webContents.send('save-request', false) },
       { label: '另存为', accelerator: 'Ctrl+Shift+S', click: () => win.webContents.send('save-request', true) },
-      { label: '编辑 / 阅读', accelerator: 'Ctrl+E', click: () => win.webContents.send('toggle-edit') },
+
       { type: 'separator' },
       { label: '下一个标签', accelerator: 'Ctrl+Tab', click: () => win.webContents.send('next-tab-request') },
       { label: '上一个标签', accelerator: 'Ctrl+Shift+Tab', click: () => win.webContents.send('previous-tab-request') },
       { label: '关闭标签', accelerator: 'Ctrl+W', click: () => win.webContents.send('close-tab-request') },
       { type: 'separator' }, { label: '退出', role: 'quit' }
     ] },
+    { label: '编辑', submenu: [
+      { id: 'edit-mode', label: '编辑模式', type: 'checkbox', accelerator: 'Ctrl+E', click: () => win.webContents.send('toggle-edit') }
+    ] },
     { label: '查看', submenu: [
+      { label: '主题', submenu: ['system', 'light', 'dark', 'warm'].map((theme, index) => ({
+        id: `theme-${theme}`, label: ['跟随系统', '浅色', '深色', '暖纸'][index], type: 'radio',
+        click: () => win.webContents.send('menu-action', 'theme', theme)
+      })) },
+      { id: 'font-up', label: '增大正文字号', click: () => win.webContents.send('menu-action', 'font', 1) },
+      { id: 'font-down', label: '减小正文字号', click: () => win.webContents.send('menu-action', 'font', -1) },
+      { label: '重置正文字号', click: () => win.webContents.send('menu-action', 'font-reset') },
+      { type: 'separator' },
       { label: '切换目录', accelerator: 'Ctrl+Shift+B', click: () => win.webContents.send('toggle-outline') },
       { label: '全屏', role: 'togglefullscreen' }, { type: 'separator' },
       { label: '放大界面', role: 'zoomIn' }, { label: '缩小界面', role: 'zoomOut' }, { label: '重置缩放', role: 'resetZoom' }
+    ] },
+    { label: '设置', submenu: [
+      { label: '偏好设置…', accelerator: 'Ctrl+,', click: () => win.webContents.send('menu-action', 'settings') },
+      { label: '界面语言', submenu: [
+        { id: 'language-zh-CN', label: '简体中文', type: 'radio', checked: uiLanguage === 'zh-CN', click: () => win.webContents.send('menu-action', 'language', 'zh-CN') },
+        { id: 'language-en', label: 'English', type: 'radio', checked: uiLanguage === 'en', click: () => win.webContents.send('menu-action', 'language', 'en') }
+      ] }
     ] }
-  ]));
+  ])));
+  syncMenuState(menuState);
+  }
+  function syncMenuState(state) {
+    const menu = Menu.getApplicationMenu();
+    if (['system', 'light', 'dark', 'warm'].includes(state.theme)) menu.getMenuItemById(`theme-${state.theme}`).checked = true;
+    if (Number.isInteger(state.fontSize)) {
+      menu.getMenuItemById('font-up').enabled = state.fontSize < 24;
+      menu.getMenuItemById('font-down').enabled = state.fontSize > 13;
+    }
+    if (typeof state.editing === 'boolean') menu.getMenuItemById('edit-mode').checked = state.editing;
+  }
+  buildMenu();
+  ipcMain.on('menu-state', (event, state) => {
+    trusted(event);
+    if (!state || typeof state !== 'object') return;
+    Object.assign(menuState, state);
+    syncMenuState(state);
+  });
   await win.loadFile(path.join(__dirname, 'index.html'));
   const initialFile = process.argv.slice(app.isPackaged ? 1 : 2).find(arg => /\.(md|markdown)$/i.test(arg));
   await openDocument(initialFile || welcome, false);
@@ -117,6 +163,9 @@ app.whenReady().then(async () => {
       await require('../test/desktop-smoke.cjs')({ win, openDocument, app });
       await require('../test/editor-smoke.cjs')({ win, openDocument, app });
       await require('../test/tabs-smoke.cjs')({ win, openDocument, app });
+      await require('../test/code-edit-smoke.cjs')({ win, openDocument, app });
+      await require('../test/markdown-edit-smoke.cjs')({ win, openDocument, app });
+      await require('../test/i18n-smoke.cjs')({ win, openDocument, app });
       app.exit(0);
     } catch (error) {
       console.error(error);
