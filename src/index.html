@@ -6,24 +6,26 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
   <title>MdView</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-bar.css">
+  <link rel="stylesheet" href="color-controls.css">
+  <link rel="stylesheet" href="sidebar.css">
+  <link rel="stylesheet" href="link-icons.css">
+  <link rel="stylesheet" href="table-controls.css">
+  <link rel="stylesheet" href="styled-select.css">
+  <link rel="stylesheet" href="image-group-controls.css">
+  <link rel="stylesheet" href="interaction-effects.css">
   <script src="generated/rich-editor.js" defer></script>
+  <script src="icons.js" defer></script>
   <script src="renderer.js" defer></script>
+  <script src="styled-select.js" defer></script>
+  <script src="menu-bar.js" defer></script>
+  <script src="color-controls.js" defer></script>
+  <script src="sidebar.js" defer></script>
+  <script src="link-icons.js" defer></script>
 </head>
 <body>
-  <header class="toolbar">
-    <div class="brand"><img class="brand-icon" src="assets/mdview.svg" alt="MdView 书页标志"><strong>Md<span>View</span></strong><span class="brand-label">阅读，让思路清晰</span></div>
-    <div class="tools">
-      <button id="new" title="新建空白文档（Ctrl+N）">新建</button>
-      <button id="open" class="primary" title="打开 Markdown（Ctrl+O）">＋ 打开文件</button>
-      <button id="reload" title="重新读取文件（Ctrl+R）">刷新</button>
-      <button id="settings" title="设置默认保存位置">设置</button>
-      <button id="edit" title="直接编辑（Ctrl+E）">编辑</button><button id="save" title="保存（Ctrl+S）">保存</button><button id="save-as">另存为</button><span id="edit-status" role="status"></span>
-      <span class="divider"></span>
-      <label class="sr-only" for="theme">阅读主题</label>
-      <select id="theme" title="阅读主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option><option value="warm">暖纸</option></select>
-      <button id="font-down" aria-label="减小字号" title="减小阅读字号（Ctrl＋滚轮向下）">A−</button><span id="font-size" aria-live="polite">16</span><button id="font-up" aria-label="增大字号" title="增大阅读字号（Ctrl＋滚轮向上）">A＋</button>
-    </div>
-  </header>
+
+  <nav id="tab-bar" role="tablist" aria-label="打开的文档"></nav>
   <div class="workspace">
     <aside id="sidebar">
       <div class="sidebar-heading"><span>文档目录</span><span id="heading-count">0</span></div>
@@ -31,18 +33,38 @@
       <div class="sidebar-note"><span class="status-dot"></span>本地阅读 · 文件不上传<br><span>拖入 Markdown 即可打开</span></div>
     </aside>
     <main id="reader">
-      <div class="document-header"><div><div class="eyebrow">MARKDOWN READER</div><h1 id="file-name">准备阅读</h1><p id="file-path">打开一份文档，开始专注阅读。</p></div><button id="toggle-outline" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+Shift+B）">☰</button></div>
+      <div class="document-header"><div><div class="eyebrow">本地文档</div><span class="metadata-separator" aria-hidden="true">·</span><h1 id="file-name">准备阅读</h1><span class="metadata-separator" aria-hidden="true">·</span><p id="file-path">打开一份文档，开始专注阅读。</p></div><button id="toggle-outline" class="icon-button" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+Shift+B）"><span data-icon="outline"></span></button></div>
       <div id="notice" role="status" hidden></div>
-      <div id="editor-tools" hidden>
-        <div class="editor-actions"><select id="block-type" aria-label="段落样式"><option value="0">正文</option><option value="1">标题 1</option><option value="2">标题 2</option><option value="3">标题 3</option></select><button data-edit="toggleBold">加粗</button><button data-edit="toggleItalic">斜体</button><button data-edit="toggleBulletList">列表</button><button data-edit="toggleOrderedList">编号</button><button data-edit="toggleBlockquote">引用</button><button data-edit="toggleCodeBlock">代码块</button><button data-edit="table">表格</button><button data-edit="addRowAfter">加行</button><button data-edit="deleteTable">删表</button><button data-edit="undo">撤销</button><button data-edit="redo">重做</button></div>
-        <p class="editor-note">直接点击正文输入 · Ctrl+B 加粗 · Ctrl+S 保存 · 保存编辑后会规范化 Markdown 排版</p>
-      </div>
       <article id="editor-content" class="markdown" hidden></article>
       <article id="content" class="markdown" aria-label="Markdown 内容"></article>
       <div class="end-mark">— 阅读到这里 —</div>
     </main>
+    <aside id="editor-tools" aria-label="编辑格式工具" hidden>
+      <div class="inspector-heading"><div class="inspector-title"><span data-icon="sliders"></span><strong>格式</strong></div><button id="toggle-editor-tools" class="icon-button" aria-label="折叠格式面板" aria-expanded="true" aria-controls="editor-panel-body" title="折叠格式面板"><span data-icon="panel-right"></span></button></div>
+      <div id="editor-panel-body">
+        <section class="inspector-section">
+          <h2>文字样式</h2>
+          <label class="field-label" for="block-type">段落类型</label>
+          <select id="block-type"><option value="0">正文</option><option value="1">标题 1</option><option value="2">标题 2</option><option value="3">标题 3</option><option value="4">标题 4</option><option value="5">标题 5</option><option value="6">标题 6</option></select>
+          <div class="format-grid"><button data-edit="toggleBold" title="加粗（Ctrl+B）"><span data-icon="bold"></span><span>加粗</span></button><button data-edit="toggleItalic" title="斜体（Ctrl+I）"><span data-icon="italic"></span><span>斜体</span></button><button data-edit="toggleStrike" title="删除线"><span class="format-symbol" aria-hidden="true"><s>S</s></span><span>删除线</span></button><button data-edit="toggleUnderline" title="下划线（Ctrl+U）"><span class="format-symbol" aria-hidden="true"><u>U</u></span><span>下划线</span></button><button data-edit="toggleCode" title="行内代码"><span data-icon="code"></span><span>行内代码</span></button></div>
+        </section>
+        <section class="inspector-section">
+          <h2>段落与内容</h2>
+          <div class="format-grid"><button data-edit="toggleBulletList" title="无序列表"><span data-icon="list"></span><span>无序列表</span></button><button data-edit="toggleOrderedList" title="有序列表"><span data-icon="list-ordered"></span><span>有序列表</span></button><button data-edit="toggleBlockquote" title="引用"><span data-icon="quote"></span><span>引用</span></button><button data-edit="toggleCodeBlock" title="代码块"><span data-icon="code"></span><span>代码块</span></button><button data-edit="toggleTaskList" title="任务列表"><span data-icon="check"></span><span>任务列表</span></button><button data-edit="setHorizontalRule" title="分隔线"><span class="format-symbol" aria-hidden="true">—</span><span>分隔线</span></button><button data-edit="insertDate" title="插入本地日期（YYYY-MM-DD）"><span class="format-symbol" aria-hidden="true">▦</span><span>插入日期</span></button></div>
+        </section>
+        <section class="inspector-section">
+          <h2>表格</h2>
+          <div class="format-grid"><button data-edit="table" title="插入三行三列表格"><span data-icon="table"></span><span>插入表格</span></button><button data-edit="addRowAfter" title="在当前行后添加一行"><span data-icon="row-plus"></span><span>添加行</span></button><button data-edit="deleteTable" class="danger-action" title="删除当前表格"><span data-icon="trash"></span><span>删除表格</span></button></div>
+        </section>
+        <section class="inspector-section">
+          <h2>编辑历史</h2>
+          <div class="format-grid"><button data-edit="undo" title="撤销（Ctrl+Z）"><span data-icon="undo"></span><span>撤销</span></button><button data-edit="redo" title="重做（Ctrl+Shift+Z）"><span data-icon="redo"></span><span>重做</span></button></div>
+        </section>
+        <div class="inspector-help"><span><kbd>Ctrl</kbd> + <kbd>S</kbd> 保存文档</span><p>直接在正文中编辑。保存时会规范化 Markdown 排版。</p></div>
+      </div>
+    </aside>
   </div>
-  <footer><span id="document-status">就绪</span><span>UTF-8<span class="footer-separator">·</span>Markdown<span class="footer-separator">·</span><span id="theme-status">浅色</span></span></footer>
+  <footer><div class="footer-state"><span id="edit-status" role="status"></span><span id="document-status">就绪</span></div><span>UTF-8<span class="footer-separator">·</span>Markdown<span class="footer-separator">·</span><span id="theme-status">浅色</span></span></footer>
   <dialog id="code-dialog" aria-labelledby="code-dialog-title">
     <header class="code-dialog-heading"><div><strong id="code-dialog-title">单独查看代码</strong><span>Ctrl＋滚轮缩放 · 点击百分比恢复默认</span></div><button id="close-code-dialog" type="button" autofocus>关闭 Esc</button></header>
     <div id="code-dialog-content" class="markdown"></div>
@@ -50,6 +72,10 @@
   </dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <header class="code-dialog-heading"><strong id="settings-title">设置</strong><button id="close-settings" autofocus>关闭 Esc</button></header>
+    <h3>阅读外观</h3>
+    <label class="view-row" for="theme"><span>主题</span><select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option><option value="warm">暖纸</option></select></label>
+    <div class="view-row"><span>正文字号</span><div class="font-controls"><button id="font-down" aria-label="减小字号" title="减小阅读字号（Ctrl＋滚轮向下）">A−</button><span id="font-size" aria-live="polite">16</span><button id="font-up" aria-label="增大字号" title="增大阅读字号（Ctrl＋滚轮向上）">A＋</button></div></div>
+    <p class="popover-hint">也可使用 Ctrl + 滚轮调整字号</p>
     <h3>默认保存文件夹</h3>
     <p id="save-directory" role="status"></p>
     <p class="settings-note">新建文档和另存为时默认使用此位置，仍可在保存窗口中修改。已有文件直接保存到原位置。</p>

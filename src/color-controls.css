@@ -1,0 +1,9 @@
+.color-control { display: grid; grid-template-columns: minmax(0, 1fr) 34px 48px; align-items: center; gap: 7px; margin-top: 10px; }
+.color-control label { color: var(--text); font-size: 12px; }
+.color-control input[type="color"] { width: 34px; height: 30px; padding: 3px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); cursor: pointer; }
+.color-control input[data-active="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.color-control input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.color-control button { padding: 5px 3px; font-size: 11px; }
+.color-control input:disabled { opacity: .45; cursor: default; }
+/* Foreground color must survive mark nesting and theme-specific mark colors. */
+:root .markdown span[data-color] mark, :root .markdown span[data-color] a { color: inherit; }

@@ -1,0 +1,6 @@
+/* Link decorations are added to this external sheet through CSSOM, not inline
+   styles or editable DOM. Existing img-src data: covers normalized PNGs. */
+#link-icon-settings { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 12px; }
+#link-icon-settings .view-row { gap: 16px; color: var(--text); }
+#link-icons-enabled { accent-color: var(--accent); flex: 0 0 auto; }
+#link-icons-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
