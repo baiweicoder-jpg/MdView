@@ -1,10 +1,11 @@
 const path = require('node:path');
 const { dialog, ipcMain } = require('electron');
 const { saveTextFile, readTextFile, MAX_DOCUMENT } = require('./document-file.cjs');
-const { renderMarkdown } = require('./markdown.cjs');
+const { renderMarkdown, renderEditorHtml } = require('./markdown.cjs');
 const { translate } = require('./i18n.cjs');
+const { viewState, pathKey, MAX_TABS } = require('./workspace-session.cjs');
 
-module.exports = function editingSession(win, trusted, welcome, getSettings) {
+module.exports = function editingSession(win, trusted, welcome, getSettings, persist = () => {}) {
   const t = key => translate(key, getSettings().language);
   const displayName = tab => tab.document.path ? tab.document.name : t('未命名.md');
   const tabs = [];
@@ -15,30 +16,32 @@ module.exports = function editingSession(win, trusted, welcome, getSettings) {
 
   const summary = () => tabs.map(tab => ({ id: tab.id, name: tab.document.name, path: tab.document.path, dirty: tab.dirty, active: tab === active }));
   const refreshTitle = () => win.setTitle(`${active?.dirty ? '● ' : ''}${active ? displayName(active) : 'MdView'} — MdView`);
-  const pushTabs = () => { refreshTitle(); send('tabs', summary()); };
+  const snapshot = () => ({ version: 1, tabs: tabs.slice(0, MAX_TABS).map(tab => ({ path: tab.document.path, viewState: tab.viewState })), activeIndex: Math.max(0, tabs.indexOf(active)) });
+  const pushTabs = () => { refreshTitle(); send('tabs', summary()); persist(snapshot()); };
+  const documentPayload = tab => ({ ...tab.document, source: tab.source, editorHtml: renderEditorHtml(tab.source), id: tab.id, viewState: { ...tab.viewState } });
   const findById = id => tabs.find(tab => tab.id === id);
 
-  function setActive(tab, { edit = false, notify = true } = {}) {
+  function setActive(tab, { edit = tab.viewState.editing, notify = true } = {}) {
     active = tab;
     pushTabs();
-    if (notify) send('document', { ok: true, document: { ...tab.document, source: tab.source, id: tab.id }, edit });
+    if (notify) send('document', { ok: true, document: documentPayload(tab), edit });
   }
 
   function openDocument(document, reload = false) {
     if (!document || !document.path) return;
-    const existing = tabs.find(tab => tab.document.path === document.path);
+    const existing = tabs.find(tab => tab.document.path && pathKey(tab.document.path) === pathKey(document.path));
     if (existing) {
       if (reload) { existing.document = document; existing.source = document.source; existing.dirty = false; }
       if (reload || existing !== active) setActive(existing);
       return;
     }
-    tabs.push({ id: ++sequence, document, source: document.source, dirty: false });
+    tabs.push({ id: ++sequence, document, source: document.source, dirty: false, viewState: viewState(document.viewState) });
     setActive(tabs[tabs.length - 1]);
   }
 
   function newBlank() {
     const document = { path: '', name: '未命名.md', source: '', html: '', editorHtml: '', headings: [], warnings: [], characters: 0, fingerprint: null, bom: false, newline: '\n' };
-    tabs.push({ id: ++sequence, document, source: '', dirty: false });
+    tabs.push({ id: ++sequence, document, source: '', dirty: false, viewState: viewState({ editing: true }) });
     setActive(tabs[tabs.length - 1], { edit: true });
   }
 
@@ -55,7 +58,7 @@ module.exports = function editingSession(win, trusted, welcome, getSettings) {
     const tab = findById(id);
     if (!tab) throw Error('文档不存在。');
     setActive(tab, { notify: false });
-    return { ok: true, document: { ...tab.document, source: tab.source, id: tab.id }, edit: false };
+    return { ok: true, document: documentPayload(tab), edit: tab.viewState.editing };
   }
 
   async function saveTab(tab, asNew) {
@@ -124,6 +127,13 @@ module.exports = function editingSession(win, trusted, welcome, getSettings) {
     return confirmDirty(active);
   }
 
+  ipcMain.on('workspace-view', (event, payload) => {
+    trusted(event);
+    const tab = findById(payload?.id);
+    if (!tab) return;
+    tab.viewState = viewState(payload);
+    persist(snapshot());
+  });
   ipcMain.on('draft', (event, payload) => { trusted(event); try { updateSource(payload.id, payload.source); } catch (error) { send('edit-error', error.message); } });
   ipcMain.handle('save', (event, payload) => { trusted(event); return exclusive(async () => { updateSource(payload.id, payload.source); return saveTab(active, payload.asNew); }); });
   ipcMain.handle('switch-tab', (event, payload) => { trusted(event); return exclusive(() => switchTab(payload.id, payload.source)); });
@@ -147,6 +157,17 @@ module.exports = function editingSession(win, trusted, welcome, getSettings) {
     if (response === 1) { if (active) active.dirty = false; event.preventDefault(); }
   });
   return {
+    snapshot,
+    restore(workspace) {
+      // Hydrate without intermediate document events: renderer sees only the final active tab.
+      for (const document of workspace.documents) {
+        const blank = { path: '', name: '未命名.md', source: '', html: '', editorHtml: '', headings: [], warnings: [], characters: 0, fingerprint: null, bom: false, newline: '\n' };
+        const restored = document.path ? document : { ...blank, viewState: document.viewState };
+        tabs.push({ id: ++sequence, document: restored, source: restored.source, dirty: false, viewState: viewState(document.viewState) });
+      }
+      active = tabs[workspace.activeIndex] || tabs[0] || null;
+    },
+    present() { if (active) setActive(active); },
     get file() { return active?.document.path; },
     refreshTitle,
     openDocument,

@@ -41,6 +41,42 @@ for (const [name, tag, open, close] of [['highlight', 'mark', '==', '=='], ['und
     return true;
   });
 }
+// Only this exact, double-quoted six-digit syntax is markup. No raw HTML.
+md.inline.ruler.before('emphasis', 'controlled_color', (state, silent) => {
+  const start = state.pos;
+  const opening = /^<(mark|span) data-color="(#[\da-fA-F]{6})">/.exec(state.src.slice(start, state.posMax));
+  if (!opening || state.level >= state.md.options.maxNesting) return false;
+  const stack = [opening[1]];
+  let end = start + opening[0].length;
+  for (; end < state.posMax; end++) {
+    if (state.src[end] === '\\') { end++; continue; }
+    if (state.src[end] === '`') {
+      const ticks = /^`+/.exec(state.src.slice(end))[0];
+      const closing = state.src.indexOf(ticks, end + ticks.length);
+      if (closing >= 0 && closing < state.posMax) { end = closing + ticks.length - 1; continue; }
+    }
+    const nested = /^<(mark|span) data-color="#[\da-fA-F]{6}">/.exec(state.src.slice(end));
+    if (nested) { stack.push(nested[1]); end += nested[0].length - 1; continue; }
+    const closing = /^<\/(mark|span)>/.exec(state.src.slice(end));
+    if (closing && closing[1] === stack.at(-1)) {
+      stack.pop();
+      if (!stack.length) break;
+      end += closing[0].length - 1;
+    }
+  }
+  if (stack.length || end === start + opening[0].length) return false;
+  if (!silent) {
+    state.push('controlled_color_open', opening[1], 1).attrSet('data-color', opening[2].toLowerCase());
+    const previousMax = state.posMax;
+    state.pos = start + opening[0].length;
+    state.posMax = end;
+    state.md.inline.tokenize(state);
+    state.posMax = previousMax;
+    state.push('controlled_color_close', opening[1], -1);
+  }
+  state.pos = end + opening[1].length + 3;
+  return true;
+});
 // Work on parsed list tokens, never source replacement (which would alter code).
 md.core.ruler.after('inline', 'task_lists', state => {
   const lists = [];
@@ -156,4 +192,17 @@ async function readDocument(file) {
   return { ...document, ...await renderMarkdown(document.source, path.dirname(document.path)), name: path.basename(document.path), characters: document.source.length };
 }
 
-module.exports = { renderMarkdown, readDocument };
+// Editor reconstruction must parse the current draft with the same restricted
+// Markdown rules as the reader. SafeImage resolves original image paths against
+// the document's approved assets; never use a permissive HTML/Markdown parser.
+function renderEditorHtml(source) {
+  const tokens = md.parse(source, {});
+  for (const token of tokens) for (const child of token.children || []) {
+    if (child.type !== 'image') continue;
+    child.attrSet('data-md-src', child.attrGet('src') || '');
+    child.attrSet('src', '');
+  }
+  return md.renderer.render(tokens, md.options, {});
+}
+
+module.exports = { renderMarkdown, readDocument, renderEditorHtml };

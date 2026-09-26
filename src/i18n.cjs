@@ -1,5 +1,12 @@
 // Chinese source strings are stable keys; only application chrome is translated.
 const english = {
+  '侧边栏视图': 'Sidebar views', '搜索已打开的文件': 'Search open files',
+  '没有匹配的已打开文件': 'No matching open files', '没有已打开的文件': 'No open files',
+  '未保存的更改': 'Unsaved changes', '调整侧边栏宽度': 'Resize sidebar',
+  '拖动调整宽度；方向键微调，Home/End 最小或最大，双击重置': 'Drag to resize; arrow keys adjust, Home/End set minimum or maximum, double-click resets',
+  '颜色': 'Colors', '高亮颜色': 'Highlight color', '文字颜色': 'Text color', '清除高亮': 'Clear highlight',
+  '清除': 'Clear', '恢复默认文字颜色': 'Restore default text color', '默认': 'Default',
+  '应用菜单': 'Application menu', '快捷操作': 'Quick actions', '菜单栏快捷操作': 'Menu bar quick actions',
   '保存 Markdown': 'Save Markdown', '我的文档.md': 'My document.md', '不保存': 'Don’t save', '取消': 'Cancel',
   '「{name}」有未保存的修改': '“{name}” has unsaved changes', '放弃修改': 'Discard changes',
   '放弃未保存的修改并重新加载界面？': 'Discard unsaved changes and reload the interface?',

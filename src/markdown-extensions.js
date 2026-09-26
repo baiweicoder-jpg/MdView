@@ -22,13 +22,59 @@ export function serializeMarkdown(manager, doc) {
   return manager.serialize(protect(doc)).split(placeholder).join('\\=');
 }
 
+export const validColor = value => typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+const colorAttributes = () => ({ color: {
+  default: null,
+  parseHTML: element => validColor(element.getAttribute('data-color')),
+  renderHTML: attrs => validColor(attrs.color) ? { 'data-color': validColor(attrs.color) } : {},
+} });
+// CSSOM property writes work under style-src 'self'; emitted Markdown never
+// contains style attributes. The reader applies the same properties at runtime.
+function colorDOM(tag, color) {
+  const dom = document.createElement(tag);
+  if (validColor(color)) {
+    dom.setAttribute('data-color', validColor(color));
+    dom.style[tag === 'mark' ? 'backgroundColor' : 'color'] = validColor(color);
+  }
+  return { dom, contentDOM: dom };
+}
+
+function colorToken(src, lexer, tag, type) {
+  const opening = new RegExp(`^<${tag} data-color="(#[\\da-fA-F]{6})">`).exec(src);
+  if (!opening) return;
+  const stack = [tag];
+  for (let end = opening[0].length; end < src.length; end++) {
+    if (/^\n[ \t]*\n/.test(src.slice(end))) return;
+    if (src[end] === '\\') { end++; continue; }
+    if (src[end] === '`') {
+      const ticks = /^`+/.exec(src.slice(end))[0];
+      const closing = src.indexOf(ticks, end + ticks.length);
+      if (closing >= 0) { end = closing + ticks.length - 1; continue; }
+    }
+    const nested = /^<(mark|span) data-color="#[\da-fA-F]{6}">/.exec(src.slice(end));
+    if (nested) { stack.push(nested[1]); end += nested[0].length - 1; continue; }
+    const closing = /^<\/(mark|span)>/.exec(src.slice(end));
+    if (closing && closing[1] === stack.at(-1)) {
+      stack.pop();
+      if (!stack.length) return { type, raw: src.slice(0, end + closing[0].length), color: validColor(opening[1]), tokens: lexer.inlineTokens(src.slice(opening[0].length, end)) };
+      end += closing[0].length - 1;
+    }
+  }
+}
+
 // These are scoped Markdown extensions, not a switch that enables arbitrary HTML.
 export const MarkdownHighlight = Mark.create({
   name: 'highlight',
+  addAttributes: colorAttributes,
   parseHTML: () => [{ tag: 'mark' }],
-  renderHTML: () => ['mark', 0],
+  renderHTML: ({ HTMLAttributes }) => ['mark', HTMLAttributes, 0],
+  addMarkView: () => ({ mark }) => colorDOM('mark', mark.attrs.color),
   addCommands() {
-    return { toggleHighlight: () => ({ commands }) => commands.toggleMark(this.name) };
+    return {
+      toggleHighlight: () => ({ commands }) => commands.toggleMark(this.name),
+      setHighlightColor: color => ({ commands }) => !!validColor(color) && commands.setMark(this.name, { color: validColor(color) }),
+      unsetHighlight: () => ({ commands }) => commands.unsetMark(this.name),
+    };
   },
   addInputRules() {
     return [markInputRule({ find: /(?:^|\s)(==(?!\s)([^=\n]+)==)$/, type: this.type })];
@@ -36,15 +82,38 @@ export const MarkdownHighlight = Mark.create({
   addPasteRules() {
     return [markPasteRule({ find: /==(?!\s)([^=\n]+)==/g, type: this.type })];
   },
-  parseMarkdown: (token, h) => h.applyMark('highlight', h.parseInline(token.tokens || [])),
-  renderMarkdown: (node, h) => `==${h.renderChildren(node)}==`,
+  parseMarkdown: (token, h) => h.applyMark('highlight', h.parseInline(token.tokens || []), { color: validColor(token.color) }),
+  renderMarkdown: (node, h) => validColor(node.attrs?.color) ? `<mark data-color="${validColor(node.attrs.color)}">${h.renderChildren(node)}</mark>` : `==${h.renderChildren(node)}==`,
   markdownTokenizer: {
     name: 'highlight', level: 'inline',
-    start: src => src.indexOf('=='),
+    start: src => [src.indexOf('=='), src.indexOf('<mark data-color="')].filter(n => n >= 0).sort((a, b) => a - b)[0] ?? -1,
     tokenize(src, _tokens, lexer) {
+      const colored = colorToken(src, lexer, 'mark', 'highlight');
+      if (colored) return colored;
       const match = /^==((?:\\.|[^\n])+?)==/.exec(src);
       if (match) return { type: 'highlight', raw: match[0], tokens: lexer.inlineTokens(match[1]) };
     },
+  },
+});
+
+export const MarkdownTextColor = Mark.create({
+  name: 'textColor',
+  addAttributes: colorAttributes,
+  parseHTML: () => [{ tag: 'span[data-color]', getAttrs: element => validColor(element.getAttribute('data-color')) ? {} : false }],
+  renderHTML: ({ HTMLAttributes }) => ['span', HTMLAttributes, 0],
+  addMarkView: () => ({ mark }) => colorDOM('span', mark.attrs.color),
+  addCommands() {
+    return {
+      setTextColor: color => ({ commands }) => !!validColor(color) && commands.setMark(this.name, { color: validColor(color) }),
+      unsetTextColor: () => ({ commands }) => commands.unsetMark(this.name),
+    };
+  },
+  parseMarkdown: (token, h) => h.applyMark('textColor', h.parseInline(token.tokens || []), { color: validColor(token.color) }),
+  renderMarkdown: (node, h) => validColor(node.attrs?.color) ? `<span data-color="${validColor(node.attrs.color)}">${h.renderChildren(node)}</span>` : h.renderChildren(node),
+  markdownTokenizer: {
+    name: 'textColor', level: 'inline',
+    start: src => src.indexOf('<span data-color="'),
+    tokenize: (src, _tokens, lexer) => colorToken(src, lexer, 'span', 'textColor'),
   },
 });
 
@@ -76,4 +145,4 @@ export const InsertDate = Extension.create({
     };
   },
 });
-export const markdownEditingExtensions = [MarkdownHighlight, MarkdownUnderline, MarkdownTaskList, MarkdownTaskItem, InsertDate];
+export const markdownEditingExtensions = [MarkdownHighlight, MarkdownTextColor, MarkdownUnderline, MarkdownTaskList, MarkdownTaskItem, InsertDate];

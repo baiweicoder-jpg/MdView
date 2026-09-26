@@ -1,5 +1,13 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('mdview', {
+  getMenuBar: () => ipcRenderer.invoke('get-menu-bar'),
+  popupMenu: (index, point) => ipcRenderer.invoke('popup-menu', index, point),
+  quickAction: action => ipcRenderer.invoke('quick-action', action),
+  setQuickActions: actions => ipcRenderer.invoke('set-quick-actions', actions),
+  onQuickActionsChanged: callback => ipcRenderer.on('quick-actions-changed', (_event, actions) => callback(actions)),
+  onMenuStateChanged: callback => ipcRenderer.on('menu-state-changed', (_event, state) => callback(state)),
+  onActivateMenuBar: callback => ipcRenderer.on('activate-menu-bar', (_event, index) => callback(index)),
+  workspaceView: payload => ipcRenderer.send('workspace-view', payload),
   draft: payload => ipcRenderer.send('draft', payload),
   menuState: state => ipcRenderer.send('menu-state', state),
   onMenuAction: callback => ipcRenderer.on('menu-action', (_event, action, value) => callback(action, value)),

@@ -10,7 +10,7 @@ module.exports = async ({ win, openDocument, app }) => {
   const click = id => menu.getMenuItemById(id).click();
   const settle = () => run('new Promise(resolve => setTimeout(resolve, 80))');
   assert.equal(await run("!!$('.toolbar') || !!$('#file-actions') || !!$('#view-panel')"), false);
-  assert.equal(await run("$('#tab-bar').getBoundingClientRect().top"), 0);
+  assert.equal(await run("$('#tab-bar').getBoundingClientRect().top === $('#menu-bar').getBoundingClientRect().bottom"), true);
   assert.equal(await run("$('.workspace').getBoundingClientRect().top === $('#tab-bar').getBoundingClientRect().bottom"), true);
   click('theme-dark'); await settle();
   assert.equal(await run('document.documentElement.dataset.theme'), 'dark');
@@ -27,6 +27,39 @@ module.exports = async ({ win, openDocument, app }) => {
   click('edit-mode'); await settle();
   assert.equal(await run('editing'), false);
   const dir = await fs.mkdtemp(path.join(app.getPath('temp'), 'mdview-edit-'));
+  // A dirty tab must restore its actual editor tree, not just a cached source string.
+  const draftFile = path.join(dir, 'draft-a.md');
+  const otherFile = path.join(dir, 'draft-b.md');
+  await fs.writeFile(draftFile, '# Original A');
+  await fs.writeFile(otherFile, '# Original B');
+  await openDocument(draftFile);
+  await run('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))');
+  const draftId = await run('currentDocument.id');
+  await run('toggleEditing(); richEditor.editor.commands.insertContentAt(1, "DRAFT ")');
+  await openDocument(otherFile);
+  await run('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))');
+  await run(`switchToTab(${draftId})`);
+  assert.equal(await run('editing'), true, 'dirty tab resumes editing');
+  assert.match(await run('richEditor.editor.getText()'), /DRAFT Original A/, 'restored editor contains the draft');
+  await run('richEditor.editor.commands.insertContentAt(1, "SECOND "); saveDocument()');
+  assert.match(await fs.readFile(draftFile, 'utf8'), /SECOND DRAFT Original A/, 'editing after switch-back preserves both edits on disk');
+  // Deliver success then error in one renderer task, before either restore rAF.
+  const { ipcMain } = require('electron');
+  const viewUpdates = [];
+  const recordView = (_event, state) => { if (state.id === draftId) viewUpdates.push(state); };
+  ipcMain.on('workspace-view', recordView);
+  try {
+    await run(`processDocument({ok:true,document:currentDocument,edit:false});
+      processDocument({ok:false,message:'Expected failed open during restoration'});`);
+    await run('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))');
+    assert.equal(await run('restoringView'), false, 'failed open must not strand the restoration guard');
+    await run('window.mdview.getSettings()'); // IPC barrier after restoration metadata.
+    assert.ok(viewUpdates.some(state => !state.editing), 'restoration publishes view metadata despite the error');
+    viewUpdates.length = 0;
+    await run('toggleEditing(); window.mdview.getSettings()');
+    assert.ok(viewUpdates.some(state => state.editing), 'later mode changes still update workspace metadata');
+    assert.match(await run("$('#notice').textContent"), /Expected failed open/);
+  } finally { ipcMain.off('workspace-view', recordView); }
   const file = path.join(dir, 'edit.md');
   const source = '# Title\n\nA **bold** paragraph.\n\n```js\nconst n = 1;\n```\n\n![missing](missing.png)\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n';
   await fs.writeFile(file, source);
@@ -148,4 +181,5 @@ module.exports = async ({ win, openDocument, app }) => {
   await run('window.mdview.resetSaveDirectory()');
   assert.equal((await run('window.mdview.getSettings()')).saveDirectory, app.getPath('documents'));
   console.log('Editor smoke: editing, protected saves, editable new documents and persistent save directory passed');
+  await require('./editor-layout-smoke.cjs')({ win, openDocument, app });
 };

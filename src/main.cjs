@@ -64,7 +64,7 @@ function trusted(event) {
   if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== page) throw new Error('拒绝未授权请求。');
 }
 
-app.whenReady().then(async () => {
+module.exports = app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   win = new BrowserWindow({
@@ -76,7 +76,14 @@ app.whenReady().then(async () => {
   const getSettings = await require('./settings.cjs')(win, trusted, language => { uiLanguage = language; buildMenu(); editSession?.refreshTitle(); });
   uiLanguage = getSettings().language;
   ipcMain.handle('get-i18n', event => { trusted(event); return { language: uiLanguage, english }; });
-  editSession = require('./edit-session.cjs')(win, trusted, welcome, getSettings);
+  const { createSessionStore, restoreWorkspace } = require('./workspace-session.cjs');
+  const sessionStore = createSessionStore(path.join(app.getPath('userData'), 'session.json'));
+  const savedWorkspace = sessionStore.load();
+  let workspaceReady = false;
+  editSession = require('./edit-session.cjs')(win, trusted, welcome, getSettings, state => { if (workspaceReady) sessionStore.save(state); });
+  // Flush synchronously after close is accepted, including destroy() after a discard prompt.
+  win.on('closed', () => sessionStore.flush());
+  app.on('will-quit', () => sessionStore.flush());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   win.webContents.on('will-attach-webview', event => event.preventDefault());
@@ -137,6 +144,9 @@ app.whenReady().then(async () => {
       ] }
     ] }
   ])));
+  // Keep accelerator registration, but never show a duplicate native menu row.
+  win.setAutoHideMenuBar(false);
+  win.setMenuBarVisibility(false);
   syncMenuState(menuState);
   }
   function syncMenuState(state) {
@@ -149,15 +159,63 @@ app.whenReady().then(async () => {
     if (typeof state.editing === 'boolean') menu.getMenuItemById('edit-mode').checked = state.editing;
   }
   buildMenu();
+  const quickActions = {
+    edit: () => win.webContents.send('toggle-edit'),
+    save: () => win.webContents.send('save-request', false),
+    open: chooseDocument, new: newDocument,
+    outline: () => win.webContents.send('toggle-outline'),
+    settings: () => win.webContents.send('menu-action', 'settings'),
+    reload: reloadDocument
+  };
+  ipcMain.handle('quick-action', (event, action) => {
+    trusted(event);
+    if (!Object.hasOwn(quickActions, action)) throw Error('Unknown quick action');
+    return quickActions[action]();
+  });
+  ipcMain.handle('get-menu-bar', event => {
+    trusted(event);
+    return { menus: Menu.getApplicationMenu().items.map((item, index) => ({ index, label: item.label })), state: menuState };
+  });
+  ipcMain.handle('popup-menu', (event, index, point) => {
+    trusted(event);
+    const menus = Menu.getApplicationMenu().items;
+    if (!Number.isInteger(index) || index < 0 || index >= menus.length || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) throw Error('Invalid menu request');
+    const zoom = win.webContents.getZoomFactor();
+    const [width, height] = win.getContentSize();
+    const x = Math.round(Math.max(0, Math.min(width, point.x * zoom)));
+    const y = Math.round(Math.max(0, Math.min(height, point.y * zoom)));
+    return new Promise(resolve => menus[index].submenu.popup({ window: win, x, y, callback: () => resolve(true) }));
+  });
+  let altAlone = false;
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'Alt') {
+      event.preventDefault();
+      if (input.type === 'keyDown') altAlone = !input.isAutoRepeat;
+      else if (input.type === 'keyUp' && altAlone) { altAlone = false; win.webContents.send('activate-menu-bar'); }
+    } else if (input.type === 'keyDown') {
+      altAlone = false;
+      if (input.key === 'F10' && !input.shift && !input.control && !input.alt) { event.preventDefault(); win.webContents.send('activate-menu-bar'); }
+      const index = ['f', 'e', 'v', 's'].indexOf(input.key.toLowerCase());
+      if (input.alt && !input.control && index >= 0) { event.preventDefault(); win.webContents.send('activate-menu-bar', index); }
+    }
+  });
   ipcMain.on('menu-state', (event, state) => {
     trusted(event);
     if (!state || typeof state !== 'object') return;
     Object.assign(menuState, state);
     syncMenuState(state);
+    win.webContents.send('menu-state-changed', menuState);
   });
-  await win.loadFile(path.join(__dirname, 'index.html'));
   const initialFile = process.argv.slice(app.isPackaged ? 1 : 2).find(arg => /\.(md|markdown)$/i.test(arg));
-  await openDocument(initialFile || welcome, false);
+  const workspace = await restoreWorkspace(savedWorkspace, initialFile, readDocument);
+  if (!workspace.documents.length) {
+    try { workspace.documents.push(await readDocument(welcome)); }
+    catch { workspace.documents.push({ path: '', viewState: { editing: true, scrollTop: 0 } }); }
+  }
+  editSession.restore(workspace);
+  await win.loadFile(path.join(__dirname, 'index.html'));
+  workspaceReady = true;
+  editSession.present();
   if (smoke) {
     try {
       await require('../test/desktop-smoke.cjs')({ win, openDocument, app });
@@ -166,11 +224,15 @@ app.whenReady().then(async () => {
       await require('../test/code-edit-smoke.cjs')({ win, openDocument, app });
       await require('../test/markdown-edit-smoke.cjs')({ win, openDocument, app });
       await require('../test/i18n-smoke.cjs')({ win, openDocument, app });
+      await require('../test/colors-smoke.cjs')({ win, openDocument, app });
+      await require('../test/menu-bar-smoke.cjs')({ win, openDocument, app });
+      await require('../test/sidebar-smoke.cjs')({ win, openDocument, app });
       app.exit(0);
     } catch (error) {
       console.error(error);
       app.exit(1);
     }
   }
+  return { win, editSession, openDocument, sessionStore };
 }).catch(error => { console.error(error); app.exit(1); });
 app.on('window-all-closed', () => app.quit());

@@ -8,7 +8,8 @@
   "scripts": {
     "icons": "node scripts/icons.cjs",
     "start": "node scripts/launch.cjs",
-    "test": "node --test test/markdown.test.cjs test/document-file.test.cjs",
+    "test": "node --test test/markdown.test.cjs test/document-file.test.cjs test/workspace-session.test.cjs",
+    "test:session": "node --test test/session-restart.test.cjs",
     "test:desktop": "node scripts/launch.cjs --smoke-test",
     "package": "node scripts/package.cjs",
     "build": "node scripts/build.cjs",

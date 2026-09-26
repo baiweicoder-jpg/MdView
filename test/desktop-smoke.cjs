@@ -29,7 +29,7 @@ module.exports = async ({ win, openDocument, app }) => {
   const artifacts = path.resolve('artifacts', app.isPackaged ? 'packaged' : 'desktop');
   await fs.mkdir(artifacts, { recursive: true });
   await waitFor("document.querySelectorAll('#content .hljs-keyword').length > 0");
-  assert.equal(await evaluate("document.querySelector('#tab-bar').getBoundingClientRect().top"), 0);
+  assert.equal(await evaluate("document.querySelector('#tab-bar').getBoundingClientRect().top === document.querySelector('#menu-bar').getBoundingClientRect().bottom"), true);
   assert.deepEqual(await evaluate("({node: typeof require, process: typeof process, bridge: typeof window.mdview.open})"), { node: 'undefined', process: 'undefined', bridge: 'function' });
   const prefs = win.webContents.getLastWebPreferences();
   assert.equal(prefs.sandbox, true);

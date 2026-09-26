@@ -140,7 +140,7 @@ document.addEventListener('wheel', event => {
   const direction = -Math.sign(event.deltaY);
   if (codeDialog.open) changeCodeZoom(codeDialog.querySelector('.code-block'), direction);
   else changeFont(direction);
-}, { passive: false });
+}, { passive: false, capture: true });
 async function openSettings() {
   const settings = await window.mdview.getSettings();
   $('#save-directory').textContent = settings.saveDirectory;
@@ -187,6 +187,13 @@ let editing = false;
 let fileBusy = false;
 let tabs = [];
 const scrollByPath = new Map();
+let restoringView = false;
+let viewGeneration = 0;
+function rememberWorkspaceView() {
+  if (!currentDocument || restoringView) return;
+  window.mdview.workspaceView({ id: currentDocument.id, scrollTop: reader.scrollTop, editing });
+}
+reader.addEventListener('scroll', rememberWorkspaceView, { passive: true });
 window.mdview.onTabs(list => { tabs = list; renderTabs(); });
 function renderTabs() {
   const bar = $('#tab-bar');
@@ -223,11 +230,13 @@ $('#tab-bar').addEventListener('click', event => {
 });
 async function switchToTab(id) {
   if (fileBusy) return;
+  rememberWorkspaceView();
   const result = await window.mdview.switchTab({ id, source: payload().source });
   if (result && result.document) processDocument({ ok: true, document: result.document, edit: result.edit });
 }
 async function closeTab(id) {
   if (fileBusy) return;
+  rememberWorkspaceView();
   await window.mdview.closeTab({ id, source: payload().source });
 }
 window.mdview.onCloseTabRequest(() => { if (currentDocument) perform(() => closeTab(currentDocument.id)); });
@@ -240,7 +249,12 @@ window.mdview.onPreviousTabRequest(() => {
   if (index >= 0 && tabs.length > 1) perform(() => switchToTab(tabs[(index - 1 + tabs.length) % tabs.length].id));
 });
 function processDocument(result) {
+  // An error only displays a notice; it must not cancel the current document's
+  // pending restoration (which owns releasing restoringView).
+  const generation = result.ok ? ++viewGeneration : viewGeneration;
   if (result.ok) {
+    rememberWorkspaceView();
+    restoringView = true;
     richEditor?.destroy(); richEditor = null; editing = false;
     currentDocument = result.document; setEditingUI();
   }
@@ -249,6 +263,16 @@ function processDocument(result) {
     createRichEditor();
     editing = true; setEditingUI();
     richEditor.editor.commands.focus();
+  }
+  if (result.ok) {
+    const top = result.document.viewState?.scrollTop ?? scrollByPath.get(result.document.path) ?? 0;
+    reader.scrollTo({ top, behavior: 'instant' });
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (generation !== viewGeneration) return;
+      reader.scrollTo({ top, behavior: 'instant' });
+      restoringView = false;
+      rememberWorkspaceView();
+    }));
   }
 }
 window.mdview.onDocument(processDocument);
@@ -265,6 +289,7 @@ function renderDocument(result) {
   currentPath = doc.path;
   $('#content').innerHTML = doc.html;
   $('#file-name').textContent = doc.path ? doc.name : t('未命名.md');
+  $('#file-name').title = $('#file-name').textContent;
 
   $('#file-path').textContent = doc.path || t('尚未保存 · Ctrl+S 选择文件名并保存');
   $('#file-path').title = doc.path;
@@ -367,6 +392,7 @@ function setEditingUI() {
   $('#edit-status').textContent = dirty ? t('未保存') : editing ? t('编辑中') : '';
   $('#edit-status').classList.toggle('dirty', Boolean(dirty));
   syncEditorTools();
+  rememberWorkspaceView();
 }
 function createRichEditor() {
   richEditor = MdViewRich.create($('#editor-content'), currentDocument, changed);
@@ -425,6 +451,7 @@ window.mdview.onBusy(value => {
   syncEditorTools();
 });
 window.addEventListener('beforeunload', event => {
+  rememberWorkspaceView();
   if (tabs.some(tab => tab.dirty) || (currentDocument && payload().source !== currentDocument.source)) { event.preventDefault(); event.returnValue = ''; }
 });
 window.mdview.onSaved(result => {
@@ -432,6 +459,7 @@ window.mdview.onSaved(result => {
   currentDocument = { ...currentDocument, ...result };
   richEditor?.saved(result.snapshot, result.source);
   $('#file-name').textContent = result.name;
+  $('#file-name').title = result.name;
 
   $('#file-path').textContent = result.path;
   $('#file-path').title = result.path;

@@ -98,7 +98,7 @@ module.exports = async ({ win, openDocument, app }) => {
   console.log('Highlight delimiter smoke: escaped literal, highlighted interior, nested marks, backslashes, equals runs, links, code and repeated save/reload passed');
   await run('window.mdview.newDocument()');
   await run('richEditor.editor.commands.insertContent("format me"); richEditor.editor.commands.setTextSelection({from:1,to:10})');
-  for (const [command, mark] of [['toggleStrike', 'strike'], ['toggleUnderline', 'underline'], ['toggleHighlight', 'highlight'], ['toggleCode', 'code']]) {
+  for (const [command, mark] of [['toggleStrike', 'strike'], ['toggleUnderline', 'underline'], ['toggleCode', 'code']]) {
     await run(`document.querySelector('[data-edit="${command}"]').click()`);
     assert.equal(await run(`richEditor.editor.isActive('${mark}')`), true, `${command} applies its mark`);
     assert.equal(await run(`document.querySelector('[data-edit="${command}"]').getAttribute('aria-pressed')`), 'true');

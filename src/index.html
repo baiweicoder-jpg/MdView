@@ -6,9 +6,15 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
   <title>MdView</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-bar.css">
+  <link rel="stylesheet" href="color-controls.css">
+  <link rel="stylesheet" href="sidebar.css">
   <script src="generated/rich-editor.js" defer></script>
   <script src="icons.js" defer></script>
   <script src="renderer.js" defer></script>
+  <script src="menu-bar.js" defer></script>
+  <script src="color-controls.js" defer></script>
+  <script src="sidebar.js" defer></script>
 </head>
 <body>
 
@@ -20,7 +26,7 @@
       <div class="sidebar-note"><span class="status-dot"></span>本地阅读 · 文件不上传<br><span>拖入 Markdown 即可打开</span></div>
     </aside>
     <main id="reader">
-      <div class="document-header"><div><div class="eyebrow">本地文档</div><h1 id="file-name">准备阅读</h1><p id="file-path">打开一份文档，开始专注阅读。</p></div><button id="toggle-outline" class="icon-button" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+Shift+B）"><span data-icon="outline"></span></button></div>
+      <div class="document-header"><div><div class="eyebrow">本地文档</div><span class="metadata-separator" aria-hidden="true">·</span><h1 id="file-name">准备阅读</h1><span class="metadata-separator" aria-hidden="true">·</span><p id="file-path">打开一份文档，开始专注阅读。</p></div><button id="toggle-outline" class="icon-button" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+Shift+B）"><span data-icon="outline"></span></button></div>
       <div id="notice" role="status" hidden></div>
       <article id="editor-content" class="markdown" hidden></article>
       <article id="content" class="markdown" aria-label="Markdown 内容"></article>
@@ -33,7 +39,7 @@
           <h2>文字样式</h2>
           <label class="field-label" for="block-type">段落类型</label>
           <select id="block-type"><option value="0">正文</option><option value="1">标题 1</option><option value="2">标题 2</option><option value="3">标题 3</option><option value="4">标题 4</option><option value="5">标题 5</option><option value="6">标题 6</option></select>
-          <div class="format-grid"><button data-edit="toggleBold" title="加粗（Ctrl+B）"><span data-icon="bold"></span><span>加粗</span></button><button data-edit="toggleItalic" title="斜体（Ctrl+I）"><span data-icon="italic"></span><span>斜体</span></button><button data-edit="toggleStrike" title="删除线"><span class="format-symbol" aria-hidden="true"><s>S</s></span><span>删除线</span></button><button data-edit="toggleUnderline" title="下划线（Ctrl+U）"><span class="format-symbol" aria-hidden="true"><u>U</u></span><span>下划线</span></button><button data-edit="toggleHighlight" title="高亮"><span class="format-symbol" aria-hidden="true">▰</span><span>高亮</span></button><button data-edit="toggleCode" title="行内代码"><span data-icon="code"></span><span>行内代码</span></button></div>
+          <div class="format-grid"><button data-edit="toggleBold" title="加粗（Ctrl+B）"><span data-icon="bold"></span><span>加粗</span></button><button data-edit="toggleItalic" title="斜体（Ctrl+I）"><span data-icon="italic"></span><span>斜体</span></button><button data-edit="toggleStrike" title="删除线"><span class="format-symbol" aria-hidden="true"><s>S</s></span><span>删除线</span></button><button data-edit="toggleUnderline" title="下划线（Ctrl+U）"><span class="format-symbol" aria-hidden="true"><u>U</u></span><span>下划线</span></button><button data-edit="toggleCode" title="行内代码"><span data-icon="code"></span><span>行内代码</span></button></div>
         </section>
         <section class="inspector-section">
           <h2>段落与内容</h2>

@@ -25,8 +25,12 @@
     undo: '<path d="M3 5v6h6M3 11c5-9 18-6 18 3 0 3-2 6-5 7"/>',
     redo: '<path d="M21 5v6h-6M21 11C16 2 3 5 3 14c0 3 2 6 5 7"/>',
   };
-  for (const element of document.querySelectorAll('[data-icon]')) {
+  function render(root = document) {
+  for (const element of root.querySelectorAll('[data-icon]')) {
     const drawing = icons[element.dataset.icon];
     if (drawing) element.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${drawing}</svg>`;
   }
+  }
+  window.mdviewIcons = { render };
+  render();
 })();
