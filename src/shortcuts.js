@@ -55,7 +55,7 @@
     input.placeholder = text(['筛选命令、按键或使用场景…', 'Filter commands, keys or contexts…']);
     input.setAttribute('aria-label', text(['筛选快捷键', 'Filter shortcuts']));
     results.setAttribute('aria-label', text(['快捷键列表', 'Shortcut list']));
-    dialog.querySelector('footer').textContent = text(['鼠标手势 · Ctrl + 滚轮调整正文字号；单独查看代码时仅缩放代码。界面缩放与正文字号独立。', 'Mouse gesture · Ctrl + wheel resizes document text; in the code viewer it resizes only code. Interface zoom is separate.']);
+    dialog.querySelector('footer').textContent = text(['鼠标手势 · Ctrl + 滚轮：正文调整字号；单独查看代码时仅缩放代码；侧栏调整目录/文件字号；顶部菜单栏缩放整个界面（不含系统标题栏）。可在偏好设置中重置。', 'Mouse gesture · Ctrl + wheel: document text size; code viewer zoom; sidebar outline/file text size; top menu bar interface zoom (excluding system title bar). Reset in Preferences.']);
     render();
   }
   function open() {

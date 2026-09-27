@@ -109,7 +109,7 @@ module.exports = app.whenReady().then(async () => {
     return items.map(item => ({
       ...item,
       ...(item.click ? { click: (...args) => {
-        if (menuState.shortcutHelpOpen === true && item.id !== 'keyboard-shortcuts') return;
+        if (editSession?.renaming || (menuState.shortcutHelpOpen === true && item.id !== 'keyboard-shortcuts')) return;
         return item.click(...args);
       } } : {}),
       ...(item.label ? { label: t(item.label) } : {}),
@@ -149,7 +149,9 @@ module.exports = app.whenReady().then(async () => {
       { type: 'separator' },
       { label: '切换目录', accelerator: shortcutAccelerator('outline'), click: () => win.webContents.send('toggle-outline') },
       { label: '全屏', role: 'togglefullscreen' }, { type: 'separator' },
-      { label: '放大界面', role: 'zoomIn' }, { label: '缩小界面', role: 'zoomOut' }, { label: '重置缩放', role: 'resetZoom' }
+      { label: '放大界面', accelerator: 'CommandOrControl+Plus', click: () => win.webContents.send('menu-action', 'ui-zoom', 1) },
+      { label: '缩小界面', accelerator: 'CommandOrControl+-', click: () => win.webContents.send('menu-action', 'ui-zoom', -1) },
+      { label: '重置缩放', accelerator: 'CommandOrControl+0', click: () => win.webContents.send('menu-action', 'ui-zoom', 0) }
     ] },
     { label: '设置', submenu: [
       { label: '偏好设置…', accelerator: shortcutAccelerator('settings'), click: () => win.webContents.send('menu-action', 'settings') },
@@ -204,7 +206,8 @@ module.exports = app.whenReady().then(async () => {
   });
   let altAlone = false;
   win.webContents.on('before-input-event', (event, input) => {
-    if (menuState.shortcutHelpOpen === true) { altAlone = false; return; }
+    win.webContents.setIgnoreMenuShortcuts(editSession?.renaming || menuState.shortcutHelpOpen === true);
+    if (editSession?.renaming || menuState.shortcutHelpOpen === true) { altAlone = false; return; }
     if (input.key === 'Alt') {
       event.preventDefault();
       if (input.type === 'keyDown') altAlone = !input.isAutoRepeat;

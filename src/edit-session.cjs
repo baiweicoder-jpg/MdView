@@ -1,5 +1,6 @@
 const path = require('node:path');
-const { dialog, ipcMain } = require('electron');
+const { dialog, ipcMain, Menu, clipboard, shell } = require('electron');
+const fs = require('node:fs/promises');
 const { saveTextFile, readTextFile, MAX_DOCUMENT } = require('./document-file.cjs');
 const { renderMarkdown, renderEditorHtml } = require('./markdown.cjs');
 const { translate } = require('./i18n.cjs');
@@ -12,12 +13,13 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   const tabs = [];
   let active = null;
   let busy = false;
+  let renaming = false;
   let sequence = 0;
   const send = (channel, data) => { if (!win.isDestroyed()) win.webContents.send(channel, data); };
 
   const summary = () => tabs.map(tab => ({ id: tab.id, name: tab.document.name, path: tab.document.path, dirty: tab.dirty, active: tab === active }));
   const refreshTitle = () => win.setTitle(`${active?.dirty ? '● ' : ''}${active ? displayName(active) : 'MdView'} — MdView`);
-  const snapshot = () => ({ version: 2, tabs: tabs.map(tab => ({ path: tab.document.path, viewState: tab.viewState, ...(!tab.document.path ? { source: tab.source } : {}) })), activeIndex: Math.max(0, tabs.indexOf(active)) });
+  const snapshot = () => ({ version: 2, tabs: tabs.map(tab => ({ path: tab.document.path, viewState: tab.viewState, ...(!tab.document.path ? { source: tab.source, createdAt: tab.document.createdAt, updatedAt: tab.document.updatedAt } : {}) })), activeIndex: Math.max(0, tabs.indexOf(active)) });
   const pushTabs = () => { refreshTitle(); send('tabs', summary()); persist(snapshot()); };
   const documentPayload = tab => ({ ...tab.document, ...(tab.preview?.source === tab.source ? tab.preview : {}), source: tab.source, editorHtml: renderEditorHtml(tab.source), id: tab.id, viewState: { ...tab.viewState } });
   const findById = id => tabs.find(tab => tab.id === id);
@@ -45,7 +47,8 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   function newBlank() {
     if (busy) return;
     if (tabs.length >= MAX_TABS) { send('edit-error', '最多打开 100 个标签。请先关闭一个标签。'); return; }
-    const document = { path: '', name: '未命名.md', source: '', html: '', editorHtml: '', headings: [], warnings: [], characters: 0, fingerprint: null, bom: false, newline: '\n' };
+    const now = Date.now();
+    const document = { createdAt: now, updatedAt: now, path: '', name: '未命名.md', source: '', html: '', editorHtml: '', headings: [], warnings: [], characters: 0, fingerprint: null, bom: false, newline: '\n' };
     tabs.push({ id: ++sequence, document, source: '', dirty: false, viewState: viewState({ editing: true }) });
     setActive(tabs[tabs.length - 1], { edit: true });
   }
@@ -53,7 +56,13 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   function updateSource(id, source) {
     const tab = findById(id);
     if (!tab || typeof source !== 'string' || Buffer.byteLength(source) > MAX_DOCUMENT) throw Error('文档已切换或内容超过 10 MB。');
-    if (tab.source !== source) tab.preview = null;
+    if (tab.source !== source) {
+      tab.preview = null;
+      if (!tab.document.path) {
+        tab.document.updatedAt = Date.now();
+        send('document-times', { id: tab.id, createdAt: tab.document.createdAt, updatedAt: tab.document.updatedAt });
+      }
+    }
     tab.source = source;
     tab.dirty = source !== tab.document.source;
     pushTabs();
@@ -151,6 +160,87 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
     return result === true;
   }
 
+  const askRename = require('./rename-dialog.cjs')(win, trusted);
+  const { renameTextFile, validateFilename } = require('./document-file.cjs');
+  const actions = ['copy-path', 'reveal', 'rename'];
+  function requireTab(id) {
+    if (!Number.isInteger(id)) throw Error(t('文档不存在。'));
+    const tab = findById(id);
+    if (!tab) throw Error(t('文档不存在。'));
+    return tab;
+  }
+  function fileError(error) {
+    const key = ({ EEXIST: '目标文件已存在，请使用其他名称。', ENOENT: '文件不存在，请重新打开。', EACCES: '没有权限重命名此文件。', EPERM: '没有权限重命名此文件。', ENOTSUP: '此文件系统不支持安全重命名。', EXDEV: '此文件系统不支持安全重命名。' })[error.code];
+    return t(key || error.message);
+  }
+  ipcMain.handle('popup-tab-menu', (event, request) => {
+    trusted(event);
+    const tab = requireTab(request?.id);
+    if (busy) return null;
+    const point = request.point;
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) throw Error('Invalid menu point');
+    const enabled = Boolean(tab.document.path);
+    const labels = ['复制文件全路径', '打开所在文件夹', '重命名'];
+    return new Promise(resolve => {
+      let chosen = null;
+      const menu = Menu.buildFromTemplate(actions.map((action, index) => ({
+        id: action, label: t(labels[index]), enabled: enabled && (action !== 'rename' || tab.document.path !== welcome), click: () => { chosen = action; }
+      })).concat(enabled ? [] : [{ label: t('请先保存文档。'), enabled: false }]));
+      const zoom = win.webContents.getZoomFactor(), [width, height] = win.getContentSize();
+      menu.popup({ window: win, x: Math.round(Math.max(0, Math.min(width, point.x * zoom))), y: Math.round(Math.max(0, Math.min(height, point.y * zoom))), callback: () => resolve(chosen) });
+    });
+  });
+  ipcMain.handle('tab-file-action', (event, request) => {
+    trusted(event);
+    if (!request || !actions.includes(request.action)) throw Error('Invalid tab action');
+    const tab = requireTab(request.id);
+    return exclusive(async () => {
+      // Capture after freezing edits, not when the menu was opened. This also
+      // preserves the last keystroke in a DIFFERENT active tab.
+      const latest = await win.webContents.executeJavaScript('window.mdviewPrepareClose()');
+      if (active) {
+        if (!latest || latest.id !== active.id || typeof latest.source !== 'string') throw Error(t('文档已切换，请重试。'));
+        updateSource(active.id, latest.source);
+        active.viewState = viewState(latest.viewState);
+      }
+      if (findById(request.id) !== tab) throw Error(t('文档不存在。'));
+      if (!tab.document.path) throw Error(t('请先保存文档。'));
+      if (request.action === 'copy-path') { await clipboard.writeText(tab.document.path); return { ok: true }; }
+      if (request.action === 'reveal') {
+        try {
+          if (!(await fs.stat(tab.document.path)).isFile()) throw Error('文件不存在，请重新打开。');
+          shell.showItemInFolder(tab.document.path);
+        } catch (error) { throw Error(fileError(error)); }
+        return { ok: true };
+      }
+      if (tab.document.path === welcome) throw Error(t('请先另存为内置欢迎文档。'));
+      let name = tab.document.name, error = '';
+      renaming = true;
+      try {
+        while (true) {
+          name = await askRename({ name, error, language: getSettings().language });
+          if (name === null) return { ok: false, canceled: true };
+          const oldPath = tab.document.path;
+          let moved;
+          try {
+            validateFilename(name);
+            const target = path.join(path.dirname(oldPath), name);
+            if (tabs.some(other => other !== tab && other.document.path && pathKey(other.document.path) === pathKey(target))) throw Error('目标文件已在其他标签中打开，请使用其他名称。');
+            moved = await renameTextFile(tab.document, name);
+          } catch (failure) { error = fileError(failure); continue; }
+          // Only identity metadata changes: keep the disk baseline, draft, dirty flag,
+          // preview, asset approvals, selection/history and view state intact.
+          tab.document = { ...tab.document, path: moved.path, name: path.basename(moved.path) };
+          if (tab.preview) tab.preview = { ...tab.preview, path: moved.path, name: tab.document.name };
+          pushTabs();
+          send('renamed', { id: tab.id, oldPath, path: moved.path, name: tab.document.name });
+          if (!commit(snapshot())) return { ok: false, message: t('文件已重命名，但恢复记录写入失败。请在退出前重试保存。') };
+          return { ok: true };
+        }
+      } finally { renaming = false; }
+    });
+  });
+
   ipcMain.on('workspace-view', (event, payload) => {
     if (win.isDestroyed()) return;
     trusted(event);
@@ -214,11 +304,12 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   });
   return {
     snapshot,
+    get renaming() { return renaming; },
     async restore(workspace) {
       // Hydrate without intermediate document events: renderer sees only the final active tab.
       for (const document of workspace.documents) {
         const blank = { path: '', name: '未命名.md', source: '', html: '', editorHtml: '', headings: [], warnings: [], characters: 0, fingerprint: null, bom: false, newline: '\n' };
-        const restored = document.path ? document : { ...blank, viewState: document.viewState };
+        const restored = document.path ? document : { ...blank, createdAt: document.createdAt ?? null, updatedAt: document.updatedAt ?? null, viewState: document.viewState };
         const source = document.path ? restored.source : document.source || '';
         if (!document.path) Object.assign(restored, await renderMarkdown(source, getSettings().saveDirectory), { characters: source.length });
         tabs.push({ id: ++sequence, document: restored, source, dirty: source !== restored.source, viewState: viewState(document.viewState) });

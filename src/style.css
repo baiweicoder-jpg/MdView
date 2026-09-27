@@ -63,7 +63,19 @@ nav a.active { background: var(--accent-soft); color: var(--accent); border-left
 main { flex: 1; min-width: 0; overflow-y: auto; padding: 16px clamp(28px, 5vw, 78px) 24px; scroll-behavior: smooth; }
 .document-header, .markdown, #notice, .end-mark { margin-left: auto; margin-right: auto; }
 .document-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 18px; }
+.document-header { container-type: inline-size; position: relative; }
 .document-header > div { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+@container (max-width: 360px) {
+  .document-header .eyebrow, .document-header .metadata-separator, .document-header #file-path { display: none; }
+  .document-header > div { gap: 4px; }
+  .document-header #document-times { min-width: 0; }
+}
+@container (max-width: 100px) {
+  .document-header #document-times { position: absolute; right: 0; width: 1px; height: 1px; clip-path: inset(50%); }
+  .document-header > div { gap: 0; }
+}
+#document-times { color: var(--muted); font-size: 11px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 36px; max-width: 58%; flex: 0 1 auto; margin-left: auto; font-variant-numeric: tabular-nums; }
+#document-times:focus-visible { outline: 1px solid var(--muted); outline-offset: 2px; }
 .document-header .metadata-separator { color: var(--muted); flex-shrink: 0; font-size: 12px; }
 .eyebrow { color: var(--accent); font-size: 10px; font-weight: 600; white-space: nowrap; flex-shrink: 0; margin: 0; }
 #file-name { font-size: 13px; font-weight: 600; margin: 0; min-width: 0; max-width: 42%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex-shrink: 1; }

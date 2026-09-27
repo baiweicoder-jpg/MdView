@@ -44,7 +44,8 @@
   add('select-all', 'edit', '全选', 'Select all', ['Ctrl+A'], ['编辑器 / 输入框', 'Editor / text field']);
   add('copy', 'edit', '复制', 'Copy', ['Ctrl+C'], ['选中文字', 'Selected text']);
   add('cut', 'edit', '剪切', 'Cut', ['Ctrl+X'], ['编辑器 / 输入框', 'Editor / text field']);
-  add('paste', 'edit', '粘贴并替换选区', 'Paste and replace selection', ['Ctrl+V'], ['编辑器 / 输入框；编辑器支持 PNG', 'Editor / text field; PNG in editor']);
+  add('paste', 'edit', '粘贴并替换选区', 'Paste and replace selection', ['Ctrl+V'], ['编辑器识别 Markdown；支持 PNG', 'Editor recognizes Markdown; supports PNG']);
+  add('paste-plain', 'edit', '粘贴为纯文本', 'Paste as plain text', ['Ctrl+Shift+V'], ['编辑器；不解析 Markdown', 'Editor; bypass Markdown parsing']);
   add('paragraph', 'blocks', '正文', 'Paragraph', ['Ctrl+Alt+0'], editor);
   add('heading', 'blocks', '标题 1–6', 'Heading 1–6', ['Ctrl+Alt+1–6'], editor);
   add('bullet-list', 'blocks', '无序列表', 'Bullet list', ['Ctrl+Shift+8'], editor);

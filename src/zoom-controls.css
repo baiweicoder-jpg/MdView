@@ -1,0 +1,14 @@
+/* Font-only sidebar preference: layout width remains sidebar.js's responsibility. */
+#sidebar { font-size: var(--sidebar-font-size, 12px); }
+#sidebar #outline a { font-size: calc(var(--sidebar-font-size, 12px) + 1px); }
+#sidebar #sidebar-tabs button,
+#sidebar #opened-files-search,
+#sidebar .sidebar-file,
+#sidebar #opened-files-empty,
+#sidebar .sidebar-heading,
+#sidebar .sidebar-note { font-size: var(--sidebar-font-size, 12px); }
+#sidebar #sidebar-tabs button { overflow-wrap: anywhere; }
+#zoom-settings { min-width: 0; margin-top: 16px; border: 1px solid var(--border); border-radius: 7px; padding: 12px; }
+#zoom-settings p { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+#zoom-settings button { margin: 4px 8px 4px 0; max-width: 100%; white-space: normal; }
+#zoom-settings [role="alert"] { color: var(--number); }

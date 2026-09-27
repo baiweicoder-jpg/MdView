@@ -1,5 +1,11 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('mdview', {
+  popupTabMenu: request => ipcRenderer.invoke('popup-tab-menu', request),
+  tabFileAction: request => ipcRenderer.invoke('tab-file-action', request),
+  onRenamed: callback => ipcRenderer.on('renamed', (_event, value) => callback(value)),
+  onRenameQuestion: callback => ipcRenderer.on('rename-question', (_event, value) => callback(value)),
+  onRenameDismiss: callback => ipcRenderer.on('rename-dismiss', (_event, id) => callback(id)),
+  answerRename: (id, name) => ipcRenderer.send('rename-answer', { id, name }),
   onUnsavedConfirm: callback => ipcRenderer.on('unsaved-confirm', (_event, question) => callback(question)),
   onUnsavedConfirmDismiss: callback => ipcRenderer.on('unsaved-confirm-dismiss', (_event, id) => callback(id)),
   answerUnsavedConfirm: (id, choice) => ipcRenderer.send('unsaved-confirm-answer', { id, choice }),
@@ -20,6 +26,7 @@ contextBridge.exposeInMainWorld('mdview', {
   searchDocument: request => ipcRenderer.invoke('search-document', request),
   cancelContentSearch: () => ipcRenderer.send('cancel-content-search'),
   preview: payload => ipcRenderer.invoke('preview', payload),
+  onDocumentTimes: callback => ipcRenderer.on('document-times', (_event, value) => callback(value)),
   onSaved: callback => ipcRenderer.on('saved', (_event, value) => callback(value)),
   onBusy: callback => ipcRenderer.on('file-busy', (_event, value) => callback(value)),
   onSaveRequest: callback => ipcRenderer.on('save-request', (_event, value) => callback(value)),
@@ -33,6 +40,7 @@ contextBridge.exposeInMainWorld('mdview', {
   onCloseTabRequest: callback => ipcRenderer.on('close-tab-request', () => callback()),
   onNextTabRequest: callback => ipcRenderer.on('next-tab-request', () => callback()),
   onPreviousTabRequest: callback => ipcRenderer.on('previous-tab-request', () => callback()),
+  setUIZoom: factor => ipcRenderer.invoke('set-ui-zoom', factor),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   getI18n: () => ipcRenderer.invoke('get-i18n'),
   setLanguage: language => ipcRenderer.invoke('set-language', language),

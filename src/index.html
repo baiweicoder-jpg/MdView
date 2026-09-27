@@ -21,6 +21,8 @@
   <script src="renderer.js" defer></script>
   <script src="content-search.js" defer></script>
   <script src="confirm-dialog.js" defer></script>
+  <link rel="stylesheet" href="tab-context.css">
+  <script src="tab-context.js" defer></script>
   <link rel="stylesheet" href="shortcuts.css">
   <script src="shortcuts-data.js" defer></script>
   <script src="shortcuts.js" defer></script>
@@ -28,6 +30,8 @@
   <script src="menu-bar.js" defer></script>
   <script src="color-controls.js" defer></script>
   <script src="sidebar.js" defer></script>
+  <link rel="stylesheet" href="zoom-controls.css">
+  <script src="zoom-controls.js" defer></script>
   <script src="link-icons.js" defer></script>
 </head>
 <body>
@@ -40,7 +44,7 @@
       <div class="sidebar-note"><span class="status-dot"></span>本地阅读 · 文件不上传<br><span>拖入 Markdown 即可打开</span></div>
     </aside>
     <main id="reader">
-      <div class="document-header"><div><div class="eyebrow">本地文档</div><span class="metadata-separator" aria-hidden="true">·</span><h1 id="file-name">准备阅读</h1><span class="metadata-separator" aria-hidden="true">·</span><p id="file-path">打开一份文档，开始专注阅读。</p></div><button id="toggle-outline" class="icon-button" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+Shift+B）"><span data-icon="outline"></span></button></div>
+      <div class="document-header"><div><div class="eyebrow">本地文档</div><span class="metadata-separator" aria-hidden="true">·</span><h1 id="file-name">准备阅读</h1><span class="metadata-separator" aria-hidden="true">·</span><p id="file-path">打开一份文档，开始专注阅读。</p><span id="document-times" role="note" tabindex="0" hidden></span></div><button id="toggle-outline" class="icon-button" aria-label="切换目录" aria-expanded="true" title="切换目录（Ctrl+Shift+B）"><span data-icon="outline"></span></button></div>
       <div id="notice" role="status" hidden></div>
       <article id="editor-content" class="markdown" hidden></article>
       <article id="content" class="markdown" aria-label="Markdown 内容"></article>

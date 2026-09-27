@@ -12,7 +12,7 @@ function translateChrome(root = document.body) {
     if (option.textContent !== t('纯文本')) option.textContent = t('纯文本');
   }
   // Never walk document text, headings, filenames, paths or editable content.
-  const protectedSelector = '#content, #editor-content, #outline a, #file-name, #file-path, #save-directory, #shortcuts-dialog, #unsaved-dialog, #document-search-results, #document-search-count, .tab-name, .code-language, pre, code';
+  const protectedSelector = '#content, #editor-content, #outline a, #file-name, #file-path, #document-times, #save-directory, #shortcuts-dialog, #rename-dialog, #unsaved-dialog, #document-search-results, #document-search-count, .tab-name, .code-language, pre, code';
   const translateText = (node, attribute, value) => {
     const cached = chromeTranslations.get(node) || {};
     const previous = cached[attribute];
@@ -49,6 +49,7 @@ function applyLanguage(language) {
     if (!currentDocument.path) $('#file-path').textContent = t('尚未保存 · Ctrl+S 选择文件名并保存');
   }
   if (displayedDocument) updateDocumentStatus(displayedDocument);
+  renderDocumentTimes();
   renderTabs();
   setEditingUI();
   applyTheme();
@@ -141,6 +142,8 @@ $('#font-down').addEventListener('click', () => changeFont(-1));
 $('#font-up').addEventListener('click', () => changeFont(1));
 document.addEventListener('wheel', event => {
   if (!event.ctrlKey) return;
+  // Dedicated chrome controls own these gestures; leave code/body routing intact.
+  if (event.target.closest?.('#sidebar, #menu-bar, #zoom-settings')) return;
   event.preventDefault();
   if (!event.deltaY) return;
   const direction = -Math.sign(event.deltaY);
@@ -208,6 +211,8 @@ function renderTabs() {
     const item = document.createElement('div');
     item.className = 'tab' + (tab.active ? ' active' : '') + (tab.dirty ? ' dirty' : '');
     item.dataset.id = tab.id;
+    item.tabIndex = 0;
+    item.setAttribute('aria-haspopup', 'menu');
     item.setAttribute('role', 'tab');
     item.setAttribute('aria-selected', String(tab.active));
     item.title = tab.path || tab.name;
@@ -274,6 +279,7 @@ function processDocument(result) {
     if (codeDialog.open) codeDialog.close();
     for (const selector of ['#content', '#editor-content', '#outline', '#file-name', '#file-path', '#document-status']) $(selector).replaceChildren();
     $('#file-name').title = $('#file-path').title = '';
+    renderDocumentTimes();
     $('#heading-count').textContent = '0';
     $('#notice').textContent = t('没有打开的文档');
     $('#notice').hidden = false;
@@ -308,6 +314,33 @@ function processDocument(result) {
   }
 }
 window.mdview.onDocument(processDocument);
+// Local wall-clock display only; timestamps are owned by main, never by rendering.
+function formatDocumentTime(value, seconds = false) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 8640000000000000) return '—';
+  const parts = new Intl.DateTimeFormat(uiLanguage, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}), hourCycle: 'h23', calendar: 'gregory', numberingSystem: 'latn' }).formatToParts(new Date(value));
+  const get = type => parts.find(part => part.type === type)?.value;
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}${seconds ? ':' + get('second') : ''}`;
+}
+function renderDocumentTimes(doc = currentDocument) {
+  const element = $('#document-times');
+  element.hidden = !doc;
+  $('.document-header').title = '';
+  if (!doc) { element.textContent = ''; element.title = ''; element.removeAttribute('aria-label'); return; }
+  element.textContent = `${t('创建')} ${formatDocumentTime(doc.createdAt)} · ${t('更新')} ${formatDocumentTime(doc.updatedAt)}`;
+  const creation = t(doc.path ? '文件创建时间（文件系统）' : '草稿创建时间');
+  const update = t(doc.path ? '最后更新（磁盘修改时间；不含未保存编辑）' : '最后更新（草稿内容修改时间）');
+  element.title = `${creation}: ${formatDocumentTime(doc.createdAt, true)}
+${update}: ${formatDocumentTime(doc.updatedAt, true)}
+${t('本地时间；— 表示未知')}`;
+  element.setAttribute('aria-label', element.title);
+  $('.document-header').title = element.title;
+}
+window.mdview.onDocumentTimes(value => {
+  if (value.id !== currentDocument?.id || currentDocument.path) return;
+  Object.assign(currentDocument, { createdAt: value.createdAt, updatedAt: value.updatedAt });
+  if (displayedDocument?.id === value.id) Object.assign(displayedDocument, { createdAt: value.createdAt, updatedAt: value.updatedAt });
+  renderDocumentTimes();
+});
 function renderDocument(result) {
   if (!result.ok) {
     $('#notice').textContent = result.message;
@@ -325,6 +358,7 @@ function renderDocument(result) {
 
   $('#file-path').textContent = doc.path || t('尚未保存 · Ctrl+S 选择文件名并保存');
   $('#file-path').title = doc.path;
+  renderDocumentTimes(doc);
   updateDocumentStatus(doc);
   $('#heading-count').textContent = doc.headings.length;
   $('#notice').textContent = doc.warnings.join(' ');
@@ -567,6 +601,7 @@ window.mdview.onSaved(result => {
 
   $('#file-path').textContent = result.path;
   $('#file-path').title = result.path;
+  renderDocumentTimes();
   setEditingUI(); toast('已保存');
 });
 $('#editor-tools').addEventListener('mousedown', event => { if (event.target.closest('[data-edit]')) event.preventDefault(); });

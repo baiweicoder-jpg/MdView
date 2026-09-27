@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const MAX_TABS = 100;
+const { timestamp } = require('./document-times.cjs');
 const { MAX_DOCUMENT } = require('./document-file.cjs');
 const MAX_BYTES = 64 * 1024 * 1024;
 const pathKey = file => process.platform === 'win32' ? path.resolve(file).toLowerCase() : path.resolve(file);
@@ -27,6 +28,10 @@ function validateSession(value) {
     if (value.version === 2 && !item.path) {
       if (typeof item.source !== 'string' || Buffer.byteLength(item.source) > MAX_DOCUMENT) return null;
       tab.source = item.source;
+      for (const key of ['createdAt', 'updatedAt']) {
+        const time = timestamp(item[key]);
+        if (time !== null) tab[key] = time;
+      }
     }
     tabs.push(tab);
   }
@@ -87,7 +92,7 @@ async function restoreWorkspace(value, initialFile, readDocument) {
           documents.splice(replace, 1);
         }
         index = documents.length;
-        documents.push(document ? { ...document, viewState: viewState(item.viewState) } : { path: '', source: item.source || '', viewState: viewState(item.viewState) });
+        documents.push(document ? { ...document, viewState: viewState(item.viewState) } : { path: '', source: item.source || '', createdAt: timestamp(item.createdAt), updatedAt: timestamp(item.updatedAt), viewState: viewState(item.viewState) });
       }
       if (activate) activeIndex = index;
     } catch { /* Missing, inaccessible, oversized and invalid UTF-8 files are skipped. */ }

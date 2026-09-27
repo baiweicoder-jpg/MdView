@@ -7,24 +7,28 @@ module.exports = async function settings(win, trusted, onLanguageChanged = () =>
   const file = path.join(app.getPath('userData'), 'settings.json');
   let saveDirectory = '';
   let language = 'zh-CN';
+  let uiZoom = 1;
+  const validZoom = value => typeof value === 'number' && Number.isFinite(value) && value >= 0.75 && value <= 1.5;
   const allowedActions = ['edit', 'save', 'open', 'new', 'outline', 'settings', 'reload'];
   let quickActions = ['edit', 'save', 'open', 'new'];
   const validActions = value => Array.isArray(value) && value.length <= allowedActions.length && value.every(action => allowedActions.includes(action)) && new Set(value).size === value.length;
   try {
     const saved = JSON.parse(await fs.readFile(file, 'utf8'));
+    if (validZoom(saved.uiZoom)) uiZoom = saved.uiZoom;
     if (validActions(saved.quickActions)) quickActions = saved.quickActions;
     if (languages.includes(saved.language)) language = saved.language;
     if (typeof saved.saveDirectory === 'string' && path.isAbsolute(saved.saveDirectory)) saveDirectory = saved.saveDirectory;
   } catch (error) {
     if (error.code !== 'ENOENT') console.warn('无法读取保存位置设置，使用系统文档目录。');
   }
-  const get = () => ({ saveDirectory: saveDirectory || app.getPath('documents'), language, quickActions: [...quickActions] });
-  async function update(directory, nextLanguage = language, nextActions = quickActions) {
+  const get = () => ({ saveDirectory: saveDirectory || app.getPath('documents'), language, uiZoom, quickActions: [...quickActions] });
+  async function update(directory, nextLanguage = language, nextActions = quickActions, nextZoom = uiZoom) {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(`${file}.tmp`, JSON.stringify({ saveDirectory: directory, language: nextLanguage, quickActions: nextActions }, null, 2), 'utf8');
+    await fs.writeFile(`${file}.tmp`, JSON.stringify({ saveDirectory: directory, language: nextLanguage, quickActions: nextActions, uiZoom: nextZoom }, null, 2), 'utf8');
     await fs.rename(`${file}.tmp`, file);
     saveDirectory = directory;
     language = nextLanguage;
+    uiZoom = nextZoom;
     quickActions = [...nextActions];
     return get();
   }
@@ -41,6 +45,23 @@ module.exports = async function settings(win, trusted, onLanguageChanged = () =>
       const result = await update(saveDirectory, language, value);
       win.webContents.send('quick-actions-changed', result.quickActions);
       return result;
+    });
+  });
+  // Isolate this window's layout zoom from other same-origin webContents.
+  win.webContents.setZoomMode('isolated');
+  void win.webContents.setVisualZoomLevelLimits(1, 1);
+  const restoreZoom = () => win.webContents.setZoomFactor(uiZoom);
+  win.webContents.on('did-finish-load', restoreZoom);
+  // Unclaimed Chromium wheel gestures must not become persisted UI zoom.
+  win.webContents.on('zoom-changed', restoreZoom);
+  restoreZoom();
+  ipcMain.handle('set-ui-zoom', (event, value) => {
+    trusted(event);
+    if (!validZoom(value)) throw Error('Invalid UI zoom');
+    return change(async () => {
+      const result = await update(saveDirectory, language, quickActions, value);
+      restoreZoom();
+      return result.uiZoom;
     });
   });
   ipcMain.handle('get-settings', event => { trusted(event); return get(); });

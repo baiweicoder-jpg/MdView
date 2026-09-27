@@ -11,6 +11,7 @@ import { markdownEditingExtensions, serializeMarkdown } from './markdown-extensi
 import { installContentSearch } from './content-search-editor.js';
 import { installTableControls } from './table-controls.js';
 import { installImageGroupControls } from './image-group-controls.js';
+import { markdownPaste, prepareEditorHtml } from './markdown-paste.js';
 
 export function create(element, doc, onChange) {
   const assets = Object.assign(Object.create(null), doc.assets || {});
@@ -447,24 +448,11 @@ export function create(element, doc, onChange) {
       };
     }
   });
-  const content = document.createElement('div');
-  content.innerHTML = doc.editorHtml;
-  for (const block of content.querySelectorAll('.code-block')) {
-    const pre = block.querySelector('pre');
-    const code = pre.querySelector('code');
-    // markdown-it includes the fence's terminating newline; Tiptap adds it
-    // during serialization. Strip exactly one, not intentional blank lines.
-    code.textContent = code.textContent.replace(/\n$/, '');
-    block.replaceWith(pre);
-  }
-  for (const cell of content.querySelectorAll('th,td')) {
-    const align = [...cell.classList].find(name => name.startsWith('align-'));
-    if (align) cell.style.textAlign = align.slice(6);
-  }
+  const content = prepareEditorHtml(doc.editorHtml);
   const editor = new Editor({
     element,
     // Pasting a URL replaces selected content; it must not turn that content into a link.
-    extensions: [StarterKit.configure({ underline: false, link: { openOnClick: false, linkOnPaste: false }, undoRedo: {} }), Markdown, ...markdownEditingExtensions, SafeImage.configure({ allowBase64: true, inline: true }), ImagePaste, ImageMove, CodeStyle, TableKit.configure({ tableCell: false, tableHeader: false }), TableCell.extend({ content: 'paragraph' }), TableHeader.extend({ content: 'paragraph' })],
+    extensions: [StarterKit.configure({ underline: false, link: { openOnClick: false, linkOnPaste: false }, undoRedo: {} }), Markdown, ...markdownEditingExtensions, SafeImage.configure({ allowBase64: true, inline: true }), ImagePaste, markdownPaste(doc, reportPasteError), ImageMove, CodeStyle, TableKit.configure({ tableCell: false, tableHeader: false }), TableCell.extend({ content: 'paragraph' }), TableHeader.extend({ content: 'paragraph' })],
     content: content.innerHTML,
     editorProps: { attributes: { 'aria-label': '直接编辑 Markdown 内容', role: 'textbox', 'aria-multiline': 'true' } },
     onUpdate: () => onChange(),
