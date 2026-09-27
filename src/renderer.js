@@ -8,9 +8,11 @@ function t(key, values = {}) {
   return template.replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
 }
 function translateChrome(root = document.body) {
-  for (const option of root.querySelectorAll('select.code-language option[value=""]')) option.textContent = t('纯文本');
+  for (const option of root.querySelectorAll('select.code-language option[value=""]')) {
+    if (option.textContent !== t('纯文本')) option.textContent = t('纯文本');
+  }
   // Never walk document text, headings, filenames, paths or editable content.
-  const protectedSelector = '#content, #editor-content, #outline a, #file-name, #file-path, #save-directory, .tab-name, .code-language, pre, code';
+  const protectedSelector = '#content, #editor-content, #outline a, #file-name, #file-path, #save-directory, #shortcuts-dialog, #unsaved-dialog, #document-search-results, #document-search-count, .tab-name, .code-language, pre, code';
   const translateText = (node, attribute, value) => {
     const cached = chromeTranslations.get(node) || {};
     const previous = cached[attribute];
@@ -24,7 +26,7 @@ function translateChrome(root = document.body) {
   while (walker.nextNode()) {
     const node = walker.currentNode, parent = node.parentElement;
     if (!parent || (parent.closest(protectedSelector) && !parent.closest('.code-toolbar'))) continue;
-    if (parent.closest('.code-language')) continue;
+    if (parent.closest('.code-language, .paragraph-select-menu, .paragraph-select-trigger')) continue;
     const value = translateText(node, 'text', node.nodeValue);
     if (value !== node.nodeValue) node.nodeValue = value;
   }
@@ -100,12 +102,16 @@ function changeCodeZoom(block, direction) {
 function openCodeDialog(button) {
   const clone = button.closest('.code-block').cloneNode(true);
   clone.querySelector('.expand-code').remove();
+  // The expanded view is an inert snapshot, not a second editor.
+  clone.querySelector('.remove-blank-lines')?.remove();
+  clone.contentEditable = 'false';
   const selector = button.closest('.code-block').querySelector('select.code-language');
   if (selector) {
     const label = document.createElement('span');
     label.className = 'code-language';
     label.textContent = selector.value || 'text';
     clone.querySelector('.code-language').replaceWith(label);
+    clone.querySelectorAll('.code-language-trigger').forEach(trigger => trigger.remove());
   }
   $('#code-dialog-title').textContent = t('单独查看 · {language}', { language: clone.querySelector('.code-language').textContent });
   $('#code-dialog-content').replaceChildren(clone);
@@ -243,7 +249,8 @@ async function switchToTab(id) {
 async function closeTab(id) {
   if (fileBusy) return;
   rememberWorkspaceView();
-  await window.mdview.closeTab({ id, source: payload().source });
+  const result = await window.mdview.closeTab({ id, source: payload().source });
+  if (!result.ok && !result.canceled) { $('#notice').textContent = result.message; $('#notice').hidden = false; }
 }
 window.mdview.onCloseTabRequest(() => { if (currentDocument) perform(() => closeTab(currentDocument.id)); });
 window.mdview.onNextTabRequest(() => {
@@ -324,6 +331,7 @@ function renderDocument(result) {
   $('#notice').hidden = !doc.warnings.length;
   refreshOutline($('#content'), doc.headings);
   reader.scrollTop = scrollByPath.get(doc.path) || 0;
+  document.dispatchEvent(new Event('document-search-update'));
 }
 
 let outlineRoot;
@@ -383,6 +391,25 @@ function refreshOutline(root, headings) {
   for (const heading of elements) observer.observe(heading);
 }
 document.addEventListener('click', event => {
+  const wrap = event.target.closest('.wrap-code');
+  if (wrap) {
+    const wrapped = wrap.closest('.code-block').classList.toggle('code-wrapped');
+    wrap.setAttribute('aria-pressed', String(wrapped));
+    wrap.textContent = wrapped ? '不换行 / No wrap' : '换行 / Wrap';
+    wrap.title = wrapped ? '不换行 / Keep long lines' : '自动换行 / Wrap long lines';
+    return;
+  }
+  const collapse = event.target.closest('.collapse-code');
+  if (collapse) {
+    const block = collapse.closest('.code-block');
+    const folded = block.classList.toggle('code-collapsed');
+    collapse.setAttribute('aria-expanded', String(!folded));
+    collapse.textContent = folded ? '展开 / Unfold' : '折叠 / Fold';
+    collapse.title = folded ? '展开 / Expand code' : '折叠 / Collapse code';
+    // Do not leave keyboard input in an invisible editable code body.
+    if (folded) collapse.focus({ preventScroll: true });
+    return;
+  }
   const expand = event.target.closest('.expand-code');
   if (expand) { openCodeDialog(expand); return; }
   const zoom = event.target.closest('button[data-code-zoom]');
@@ -456,6 +483,7 @@ function setEditingUI() {
   syncEditorTools();
   if (currentDocument) refreshOutline(editing ? $('#editor-content') : $('#content'), editing ? undefined : displayedDocument?.headings);
   rememberWorkspaceView();
+  document.dispatchEvent(new Event('document-search-update'));
 }
 function createRichEditor() {
   richEditor = MdViewRich.create($('#editor-content'), currentDocument, changed);
@@ -487,7 +515,7 @@ $('#toggle-editor-tools').addEventListener('click', () => {
   $('#toggle-editor-tools').focus({ preventScroll: true });
 });
 applyToolsPanel();
-function changed() { window.mdview.draft(payload()); setEditingUI(); }
+function changed() { window.mdview.draft(payload()); setEditingUI(); window.mdviewSearch?.refresh(); }
 async function toggleEditing() {
   if (!currentDocument || fileBusy) return;
   if (codeDialog.open) codeDialog.close();

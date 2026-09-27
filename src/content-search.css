@@ -1,0 +1,19 @@
+#document-search { flex: 0 0 auto; min-width: 0; background: var(--surface); border-bottom: 1px solid var(--border); }
+#document-search[hidden] { display: none; }
+.document-search-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; padding: 6px 12px; }
+.document-search-bar button, .document-search-bar select { height: 30px; padding: 3px 8px; font-size: 12px; }
+#document-search-query { flex: 1 1 180px; min-width: 100px; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); padding: 4px 9px; font: inherit; }
+#document-search-case[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+#document-search-count { color: var(--muted); font-size: 12px; padding: 0 5px; }
+#document-search-results { max-height: min(220px, 27vh); overflow: auto; border-top: 1px solid var(--border); padding: 4px 12px; }
+.document-search-result { width: 100%; display: flex; gap: 14px; text-align: left; border: 0; border-radius: 4px; padding: 5px 8px; font-size: 12px; }
+.document-search-result strong { flex: 0 1 170px; min-width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.document-search-result span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; color: var(--muted); }
+.document-search-result[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+::highlight(document-search) { background-color: #ffe38a; color: #352800; }
+::highlight(document-search-selected) { background-color: #ed9e31; color: #211600; }
+.document-search-match { background-color: #ffe38a; color: #352800; }
+.document-search-selected { background-color: #ed9e31; color: #211600; outline: 1px solid #98621b; }
+:root[data-theme="dark"] .document-search-match { background-color: #6a591d; color: #fff4bd; }
+:root[data-theme="dark"] .document-search-selected { background-color: #ad691d; color: #fff; }
+@media (max-width: 650px) { .document-search-bar { padding: 5px 7px; } #document-search-count { flex: 1 1 110px; } .document-search-result strong { flex-basis: 100px; } }

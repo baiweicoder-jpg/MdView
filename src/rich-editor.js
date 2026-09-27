@@ -8,6 +8,7 @@ import { Markdown } from '@tiptap/markdown';
 import { TableKit, TableCell, TableHeader } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { markdownEditingExtensions, serializeMarkdown } from './markdown-extensions.js';
+import { installContentSearch } from './content-search-editor.js';
 import { installTableControls } from './table-controls.js';
 import { installImageGroupControls } from './image-group-controls.js';
 
@@ -151,9 +152,43 @@ export function create(element, doc, onChange) {
         nodeViews: {
           codeBlock(node, view, getPos) {
             const dom = document.createElement('section'); dom.className = 'code-block';
-            dom.innerHTML = '<div class="code-toolbar" contenteditable="false"><select class="code-language" aria-label="Code language" title="Code language"></select><div class="code-actions"><button type="button" data-code-zoom="-1">A−</button><button type="button" data-code-zoom="0" class="code-zoom-reset">100%</button><button type="button" data-code-zoom="1">A＋</button><button type="button" class="expand-code">单独查看</button><button type="button" class="copy-code">复制</button></div></div><pre><code></code></pre>';
+            dom.innerHTML = '<div class="code-toolbar" contenteditable="false"><select class="code-language" aria-label="Code language" title="Code language"></select><div class="code-actions"><button type="button" class="collapse-code" aria-expanded="true" title="折叠 / Collapse code">折叠 / Fold</button><button type="button" class="wrap-code" aria-pressed="false" title="自动换行 / Wrap long lines">换行 / Wrap</button><button type="button" data-code-zoom="-1">A−</button><button type="button" data-code-zoom="0" class="code-zoom-reset">100%</button><button type="button" data-code-zoom="1">A＋</button><button type="button" class="remove-blank-lines" title="删除此代码块的空行（可撤销） / Remove blank lines (undoable)">去空行 / Clean</button><button type="button" class="expand-code">单独查看</button><button type="button" class="copy-code">复制</button></div></div><pre><code></code></pre>';
             const select = dom.querySelector('select');
             const code = dom.querySelector('code');
+            const clean = dom.querySelector('.remove-blank-lines');
+            const toolbar = dom.querySelector('.code-toolbar');
+            // Keep pointer clicks on buttons from replacing the editor selection.
+            toolbar.addEventListener('mousedown', event => {
+              if (event.target.closest('button')) event.preventDefault();
+            });
+            clean.addEventListener('click', () => {
+              const pos = getPos();
+              if (!view.editable || typeof pos !== 'number') return;
+              const current = view.state.doc.nodeAt(pos);
+              if (current?.type.name !== 'codeBlock') return;
+              const lines = current.textContent.split('\n');
+              const ranges = [];
+              const lastContentLine = lines.findLastIndex(line => line.trim());
+              let offset = 0;
+              for (let i = 0; i < lines.length; i++) {
+                const end = offset + lines[i].length;
+                if (!lines[i].trim()) {
+                  const from = i > lastContentLine ? Math.max(0, offset - 1) : offset;
+                  const to = i === lines.length - 1 ? end : end + 1;
+                  const previous = ranges.at(-1);
+                  if (previous && previous.to >= from) previous.to = to;
+                  else if (to > from) ranges.push({ from, to });
+                }
+                offset = end + 1;
+              }
+              if (!ranges.length) return;
+              const tr = closeHistory(view.state.tr);
+              for (const { from, to } of ranges.reverse()) tr.delete(pos + 1 + from, pos + 1 + to);
+              tr.setSelection(view.state.selection.map(tr.doc, tr.mapping));
+              view.dispatch(tr);
+              view.dispatch(closeHistory(view.state.tr));
+              view.focus();
+            });
             const languages = hljs.listLanguages().sort();
             select.add(new Option('Plain text', ''));
             for (const language of languages) select.add(new Option(hljs.getLanguage(language).name || language, language));
@@ -163,6 +198,7 @@ export function create(element, doc, onChange) {
               if (![...select.options].some(option => option.value === language)) select.add(new Option(language, language));
               select.value = language;
               select.disabled = !view.editable;
+              clean.disabled = !view.editable || !current.textContent.split('\n').some(line => !line.trim()) || !current.textContent;
             }
             syncLanguage(node);
             select.addEventListener('change', () => {
@@ -182,7 +218,7 @@ export function create(element, doc, onChange) {
                 if (current.type !== node.type) return false;
                 node = current; syncLanguage(current); return true;
               },
-              stopEvent: event => select.contains(event.target),
+              stopEvent: event => toolbar.contains(event.target),
               ignoreMutation: mutation => !code.contains(mutation.target) && mutation.type !== 'selection'
             };
           }
@@ -413,7 +449,14 @@ export function create(element, doc, onChange) {
   });
   const content = document.createElement('div');
   content.innerHTML = doc.editorHtml;
-  for (const block of content.querySelectorAll('.code-block')) block.replaceWith(block.querySelector('pre'));
+  for (const block of content.querySelectorAll('.code-block')) {
+    const pre = block.querySelector('pre');
+    const code = pre.querySelector('code');
+    // markdown-it includes the fence's terminating newline; Tiptap adds it
+    // during serialization. Strip exactly one, not intentional blank lines.
+    code.textContent = code.textContent.replace(/\n$/, '');
+    block.replaceWith(pre);
+  }
   for (const cell of content.querySelectorAll('th,td')) {
     const align = [...cell.classList].find(name => name.startsWith('align-'));
     if (align) cell.style.textAlign = align.slice(6);
@@ -430,9 +473,11 @@ export function create(element, doc, onChange) {
   installTableControls(editor);
   installImageGroupControls(editor);
   editor.view.dispatch(editor.state.tr);
+  const searchHighlights = installContentSearch(editor);
   let baseline = editor.getMarkdown(), original = doc.source;
   return {
     editor,
+    searchHighlights,
     source: () => editor.getMarkdown() === baseline ? original : editor.getMarkdown(),
     saved(snapshot, raw) { baseline = snapshot === original ? baseline : snapshot; original = raw; },
     destroy: () => editor.destroy(),

@@ -136,7 +136,7 @@ for (const type of ['fence', 'code_block']) {
   const render = md.renderer.rules[type];
   md.renderer.rules[type] = (tokens, index, options, env, self) => {
     const language = tokens[index].info.trim().split(/\s+/)[0] || 'text';
-    return `<section class="code-block"><div class="code-toolbar"><span class="code-language">${md.utils.escapeHtml(language)}</span><div class="code-actions"><button type="button" data-code-zoom="-1" aria-label="缩小此代码块字号" title="缩小代码字号">A−</button><button type="button" data-code-zoom="0" class="code-zoom-reset" aria-label="恢复此代码块默认字号" title="恢复默认字号">100%</button><button type="button" data-code-zoom="1" aria-label="放大此代码块字号" title="放大代码字号">A＋</button><button class="expand-code" type="button" aria-label="单独查看此代码块" aria-haspopup="dialog">单独查看</button><button class="copy-code" type="button" aria-label="复制代码">复制</button></div></div>${render(tokens, index, options, env, self)}</section>`;
+    return `<section class="code-block"><div class="code-toolbar"><span class="code-language">${md.utils.escapeHtml(language)}</span><div class="code-actions"><button type="button" class="collapse-code" aria-expanded="true" title="折叠 / Collapse code">折叠 / Fold</button><button type="button" class="wrap-code" aria-pressed="false" title="自动换行 / Wrap long lines">换行 / Wrap</button><button type="button" data-code-zoom="-1" aria-label="缩小此代码块字号" title="缩小代码字号">A−</button><button type="button" data-code-zoom="0" class="code-zoom-reset" aria-label="恢复此代码块默认字号" title="恢复默认字号">100%</button><button type="button" data-code-zoom="1" aria-label="放大此代码块字号" title="放大代码字号">A＋</button><button class="expand-code" type="button" aria-label="单独查看此代码块" aria-haspopup="dialog">单独查看</button><button class="copy-code" type="button" aria-label="复制代码">复制</button></div></div>${render(tokens, index, options, env, self)}</section>`;
   };
 }
 
@@ -202,7 +202,16 @@ async function renderMarkdown(source, directory) {
     }
   }
   const editorHtml = md.renderer.render(tokens, md.options, {});
-  for (const child of missingImages) { child.type = 'text'; child.content = `[图片未加载：${child.content || '图片'}]`; }
+  // Give every hidden paragraph its own reader-only inline owner, in token order.
+  // Keep hidden/block flags: adjacent block renderers use them for whitespace.
+  // html_inline emits the wrappers verbatim, with no new formatting whitespace.
+  for (const token of tokens) {
+    if (token.hidden && (token.type === 'paragraph_open' || token.type === 'paragraph_close')) {
+      token.content = token.type === 'paragraph_open' ? '<span data-search-inline="true">' : '</span>';
+      token.type = 'html_inline';
+    }
+  }
+  for (const child of missingImages) { child.type = 'html_inline'; child.content = `<span data-search-image>[图片未加载：${md.utils.escapeHtml(child.content || '图片')}]</span>`; }
   return { editorHtml, assets: Object.fromEntries(images), html: md.renderer.render(tokens, md.options, {}), headings, warnings: [...warnings] };
 }
 
@@ -224,4 +233,17 @@ function renderEditorHtml(source) {
   return md.renderer.render(tokens, md.options, {});
 }
 
-module.exports = { renderMarkdown, readDocument, renderEditorHtml };
+// Search uses the same parser (including tasks/colors), without rendering or file I/O.
+function searchTextBlocks(source) {
+  return md.parse(source, {}).filter(token => ['inline', 'fence', 'code_block'].includes(token.type)).map(token => {
+    if (token.type !== 'inline') return token.content.replace(/\n$/, '');
+    return (token.children || []).map(child => {
+      if (child.type === 'text' || child.type === 'code_inline') return child.content;
+      if (child.type === 'softbreak') return ' ';
+      if (child.type === 'hardbreak') return '\n';
+      if (child.type === 'image') return '\ufffc';
+      return '';
+    }).join('');
+  });
+}
+module.exports = { renderMarkdown, readDocument, renderEditorHtml, searchTextBlocks };

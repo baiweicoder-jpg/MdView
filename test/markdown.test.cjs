@@ -83,7 +83,7 @@ test('task checkboxes preserve nested and mixed list structure without enabling 
   assert.equal((result.html.match(/data-checked="true"/g) || []).length, 2);
   assert.equal((result.html.match(/type="checkbox" disabled/g) || []).length, 3);
   assert.match(result.editorHtml, /data-type="taskList"/);
-  assert.match(result.html, /<li>Plain<\/li>/);
+  assert.match(result.html, /<li><span data-search-inline="true">Plain<\/span><\/li>/);
   assert.match(result.html, /&lt;input/);
 });
 

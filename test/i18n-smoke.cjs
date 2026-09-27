@@ -4,6 +4,7 @@ const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
 
 module.exports = async ({ win, app, openDocument }) => {
+  require('./unsaved-driver.cjs')(win);
   const evaluate = code => win.webContents.executeJavaScript(code, true);
   const waitFor = async code => {
     for (let i = 0; i < 100; i++) { if (await evaluate(code)) return; await delay(30); }

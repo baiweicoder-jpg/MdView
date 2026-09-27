@@ -1,0 +1,16 @@
+#unsaved-dialog { width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: 0 18px 64px #0004, 0 2px 8px #0002; overflow: auto; }
+#unsaved-dialog::backdrop { background: #0d162166; }
+#unsaved-dialog .unsaved-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 20px 0 24px; }
+#unsaved-dialog h2 { margin: 0; color: var(--heading); font-size: 18px; line-height: 1.5; font-weight: 650; }
+#unsaved-dialog .unsaved-x { width: 28px; height: 28px; padding: 0; border-color: transparent; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; flex-shrink: 0; }
+#unsaved-dialog .unsaved-x:hover { background: var(--accent-soft); color: var(--text); }
+#unsaved-dialog .unsaved-body { padding: 14px 24px 24px; }
+#unsaved-name { margin: 0 0 8px; font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+#unsaved-description { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; text-wrap: pretty; }
+#unsaved-dialog .unsaved-actions { display: flex; align-items: center; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--border); background: var(--bg); }
+#unsaved-dialog .unsaved-actions > span { flex: 1; }
+#unsaved-dialog .unsaved-actions button { min-width: 72px; padding: 7px 14px; font-size: 13px; white-space: nowrap; }
+#unsaved-dialog .unsaved-actions [data-choice="discard"] { border-color: transparent; background: transparent; }
+#unsaved-dialog .unsaved-actions [data-choice="discard"]:hover { background: var(--accent-soft); }
+#unsaved-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 380px) { #unsaved-dialog .unsaved-actions { padding: 14px; gap: 6px; } #unsaved-dialog .unsaved-actions button { min-width: 0; padding: 7px 10px; } }

@@ -8,10 +8,10 @@
   "scripts": {
     "icons": "node scripts/icons.cjs",
     "start": "node scripts/launch.cjs",
-    "test": "node --test test/markdown.test.cjs test/document-file.test.cjs test/workspace-session.test.cjs test/image-paste.test.cjs test/link-icons.test.cjs",
+    "test": "node --test test/markdown.test.cjs test/document-file.test.cjs test/workspace-session.test.cjs test/image-paste.test.cjs test/link-icons.test.cjs test/confirm-dialog.test.cjs test/content-search.test.cjs test/shortcuts.test.cjs",
     "test:session": "node --test --test-concurrency=1 test/session-restart.test.cjs test/draft-session.test.cjs",
     "test:desktop": "node scripts/launch.cjs --smoke-test",
-    "test:acceptance": "npm run test:desktop && node --test test/live-outline.test.cjs && electron test/image-group-smoke.cjs --integrated && electron test/table-controls-smoke.cjs && electron test/link-icons-electron.cjs && electron test/interaction-effects-smoke.cjs",
+    "test:acceptance": "npm run test:desktop && node --test test/live-outline.test.cjs && electron test/image-group-smoke.cjs --integrated && electron test/table-controls-smoke.cjs && electron test/link-icons-electron.cjs && electron test/interaction-effects-smoke.cjs && electron test/code-controls-smoke.cjs && electron test/dialog-close-smoke.cjs && electron test/shared-select-smoke.cjs && electron test/unsaved-confirm-smoke.cjs && electron test/content-search-electron.cjs && electron test/shortcuts-electron.cjs",
     "package": "node scripts/package.cjs",
     "build": "node scripts/build.cjs",
     "prestart": "npm run build",

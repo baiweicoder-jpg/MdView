@@ -5,6 +5,7 @@ const { dialog } = require('electron');
 const { setTimeout: delay } = require('node:timers/promises');
 
 module.exports = async ({ win, openDocument, app }) => {
+  require('./unsaved-driver.cjs')(win);
   const run = code => win.webContents.executeJavaScript(code, true);
   const waitFor = async (code, message) => {
     const deadline = Date.now() + 8000;

@@ -14,9 +14,16 @@
   <link rel="stylesheet" href="styled-select.css">
   <link rel="stylesheet" href="image-group-controls.css">
   <link rel="stylesheet" href="interaction-effects.css">
+  <link rel="stylesheet" href="confirm-dialog.css">
   <script src="generated/rich-editor.js" defer></script>
   <script src="icons.js" defer></script>
+  <link rel="stylesheet" href="content-search.css">
   <script src="renderer.js" defer></script>
+  <script src="content-search.js" defer></script>
+  <script src="confirm-dialog.js" defer></script>
+  <link rel="stylesheet" href="shortcuts.css">
+  <script src="shortcuts-data.js" defer></script>
+  <script src="shortcuts.js" defer></script>
   <script src="styled-select.js" defer></script>
   <script src="menu-bar.js" defer></script>
   <script src="color-controls.js" defer></script>
@@ -66,12 +73,12 @@
   </div>
   <footer><div class="footer-state"><span id="edit-status" role="status"></span><span id="document-status">就绪</span></div><span>UTF-8<span class="footer-separator">·</span>Markdown<span class="footer-separator">·</span><span id="theme-status">浅色</span></span></footer>
   <dialog id="code-dialog" aria-labelledby="code-dialog-title">
-    <header class="code-dialog-heading"><div><strong id="code-dialog-title">单独查看代码</strong><span>Ctrl＋滚轮缩放 · 点击百分比恢复默认</span></div><button id="close-code-dialog" type="button" autofocus>关闭 Esc</button></header>
+    <header class="code-dialog-heading"><div><strong id="code-dialog-title">单独查看代码</strong><span>Ctrl＋滚轮缩放 · 点击百分比恢复默认</span></div><button id="close-code-dialog" class="dialog-close-icon" type="button" aria-label="关闭 Esc" title="关闭 Esc" autofocus><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
     <div id="code-dialog-content" class="markdown"></div>
     <div id="code-dialog-status" class="sr-only" role="status"></div>
   </dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
-    <header class="code-dialog-heading"><strong id="settings-title">设置</strong><button id="close-settings" autofocus>关闭 Esc</button></header>
+    <header class="code-dialog-heading"><strong id="settings-title">设置</strong><button id="close-settings" class="dialog-close-icon" type="button" aria-label="关闭 Esc" title="关闭 Esc" autofocus><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
     <h3>阅读外观</h3>
     <label class="view-row" for="theme"><span>主题</span><select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option><option value="warm">暖纸</option></select></label>
     <div class="view-row"><span>正文字号</span><div class="font-controls"><button id="font-down" aria-label="减小字号" title="减小阅读字号（Ctrl＋滚轮向下）">A−</button><span id="font-size" aria-live="polite">16</span><button id="font-up" aria-label="增大字号" title="增大阅读字号（Ctrl＋滚轮向上）">A＋</button></div></div>

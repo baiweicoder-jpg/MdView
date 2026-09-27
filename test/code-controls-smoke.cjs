@@ -1,0 +1,104 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+module.exports = async ({ win, openDocument, app }) => {
+  const run = code => win.webContents.executeJavaScript(code, true);
+  const clickClean = async () => {
+    await run('cb().querySelector(".remove-blank-lines").scrollIntoView({block:"center"}); new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+    const point = await run('(()=>{const r=cb().querySelector(".remove-blank-lines").getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()');
+    win.webContents.sendInputEvent({type:'mouseDown',...point,button:'left',clickCount:1});
+    win.webContents.sendInputEvent({type:'mouseUp',...point,button:'left',clickCount:1});
+    await run('new Promise(r=>setTimeout(r,60))');
+  };
+  const dir = await fs.mkdtemp(path.join(process.env.TMPDIR || app.getPath('temp'), 'mdview-code-'));
+  const file = path.join(dir, 'code.md');
+  const text = '  const first = 1;\n\n \t \n\tconst second = "' + 'long'.repeat(140) + '";\n\n  last();';
+  const source = '# Code\n\n```js\n' + text + '\n```\n\n```custom-lang\nsecond block\n```\n';
+  await fs.writeFile(file, source);
+  await openDocument(file);
+  await run('if(editing) toggleEditing(); window.cb=()=>document.querySelector((editing?"#editor-content":"#content")+" .code-block"); void 0;');
+  assert.equal(await run('!!cb().querySelector(".collapse-code")'), true, 'reader has collapse control');
+  const height = await run('cb().getBoundingClientRect().height');
+  await run('cb().querySelector(".collapse-code").click()');
+  assert.ok(await run('cb().getBoundingClientRect().height') < height, 'collapse changes actual geometry');
+  assert.equal(await run('cb().querySelector("pre").getBoundingClientRect().height'), 0);
+  await run('cb().querySelector(".collapse-code").click()');
+  assert.equal(await run('cb().getBoundingClientRect().height'), height);
+  assert.equal(await run('currentDocument.source'), source);
+  assert.equal(await run('!!cb().querySelector(".wrap-code")'), true, 'reader has wrap control');
+  assert.equal(await run('cb().querySelector("pre").scrollWidth > cb().querySelector("pre").clientWidth'), true);
+  await run('cb().querySelector(".wrap-code").click()');
+  assert.equal(await run('cb().querySelector("pre").scrollWidth <= cb().querySelector("pre").clientWidth'), true, 'long tokens wrap without horizontal overflow');
+  assert.equal(await run('document.querySelectorAll("#content .code-wrapped").length'), 1, 'wrap applies only to target block');
+  assert.equal(await run('currentDocument.source'), source);
+  await run('cb().querySelector(".wrap-code").click()');
+  assert.equal(await run('cb().querySelector("pre").scrollWidth > cb().querySelector("pre").clientWidth'), true);
+  assert.equal(await run('!!cb().querySelector(".remove-blank-lines")'), false, 'reader omits destructive operations');
+  await run('toggleEditing(); window.ce=richEditor.editor; void 0;');
+  await run('new Promise(r=>setTimeout(r,80))');
+  await run('window.codeViolations=[]; document.addEventListener("securitypolicyviolation", e=>codeViolations.push(e.violatedDirective));');
+  assert.equal(await run('!!cb().querySelector(".remove-blank-lines")'), true, 'editor has blank-line removal');
+  const json = await run('ce.getJSON()');
+  const saved = await run('richEditor.source()');
+  await run('cb().querySelector(".collapse-code").click()');
+  assert.equal(await run('cb().querySelector("pre").getBoundingClientRect().height'), 0);
+  await run('cb().querySelector(".collapse-code").click(); cb().querySelector(".wrap-code").click()');
+  assert.equal(await run('cb().querySelector("pre").scrollWidth <= cb().querySelector("pre").clientWidth'), true);
+  assert.deepEqual(await run('ce.getJSON()'), json, 'view actions never change editor model');
+  assert.equal(await run('richEditor.source()'), saved);
+  await run('cb().querySelector(".expand-code").click()');
+  assert.equal(await run('codeDialog.open'), true);
+  assert.equal(await run('!!codeDialog.querySelector(".remove-blank-lines")'), false, 'snapshot dialog is non-destructive');
+  assert.equal(await run('codeDialog.querySelector(".code-language").textContent'), 'js');
+  await run('codeDialog.querySelector(".collapse-code").click()');
+  assert.equal(await run('codeDialog.querySelector("pre").getBoundingClientRect().height'), 0);
+  await run('codeDialog.querySelector(".collapse-code").click(); codeDialog.querySelector(".wrap-code").click()');
+  assert.equal(await run('codeDialog.querySelector("pre").scrollWidth > codeDialog.querySelector("pre").clientWidth'), true);
+  await run('codeDialog.querySelector(".wrap-code").click()');
+  assert.equal(await run('codeDialog.querySelector("pre").scrollWidth <= codeDialog.querySelector("pre").clientWidth'), true);
+  await run('codeDialog.querySelectorAll("[data-code-zoom]")[2].click(); codeDialog.close()');
+  assert.equal(await run('cb().dataset.codeZoom || "100"'), '100', 'dialog zoom remains independent');
+  assert.equal(await run('richEditor.source()'), saved);
+  await run(`window.codePos=0; ce.state.doc.descendants((n,p)=>{if(n.type.name==='codeBlock'&&!codePos)codePos=p}); ce.commands.setTextSelection({from:codePos+1,to:codePos+1+${text.length}}); void 0;`);
+  const selection = await run('({from:ce.state.selection.from,to:ce.state.selection.to})');
+  await clickClean();
+  const cleaned = text.split('\n').filter(line => line.trim()).join('\n');
+  assert.equal(await run('ce.state.doc.nodeAt(codePos).textContent'), cleaned);
+  assert.equal(await run('ce.state.doc.nodeAt(codePos).attrs.language'), 'js');
+  assert.equal(await run('ce.state.selection.to-ce.state.selection.from'), cleaned.length, 'selection maps through removed lines');
+  await run('ce.commands.undo()');
+  assert.deepEqual(await run('ce.getJSON()'), json, 'one undo restores all blank lines');
+  assert.deepEqual(await run('({from:ce.state.selection.from,to:ce.state.selection.to})'), selection);
+  await run('ce.commands.redo(); saveDocument()');
+  const disk = await fs.readFile(file, 'utf8');
+  assert.ok(disk.includes('```js\n'+cleaned+'\n```'));
+  assert.ok(disk.includes('```custom-lang\nsecond block\n```'), disk);
+  assert.deepEqual(await run('codeViolations'), [], 'controls introduce no CSP violations');
+  const reopen = path.join(dir, 'reopened.md');
+  await fs.copyFile(file, reopen);
+  await openDocument(reopen);
+  await run('if(!editing) toggleEditing(); window.ce=richEditor.editor; void 0;');
+  assert.equal(await run('cb().querySelector("code").textContent'), cleaned, 'fresh disk reopen preserves exact code');
+  assert.equal(await run('cb().querySelector("select.code-language").value'), 'js');
+  assert.equal(await run('richEditor.source()'), disk);
+  await run('ce.commands.insertContentAt(1,"Saved twice "); saveDocument()');
+  const twice = await fs.readFile(reopen, 'utf8');
+  assert.ok(twice.includes('```js\n'+cleaned+'\n```'), 'unrelated edit does not grow trailing blank lines');
+  assert.ok(twice.includes('```custom-lang\nsecond block\n```'));
+  for (const [input, expected] of [['\n \t\n  x\n\n\t', '  x'], [' \t\n\n', ''], ['  unchanged', '  unchanged']]) {
+    await run(`ce.commands.setContent({type:'doc',content:[{type:'codeBlock',attrs:{language:'custom-lang'},content:${input ? JSON.stringify([{type:'text',text:input}]) : '[]'}}]}); cb().querySelector('.remove-blank-lines').click();`);
+    assert.equal(await run('ce.state.doc.firstChild.textContent'), expected);
+    assert.equal(await run('ce.state.doc.firstChild.attrs.language'), 'custom-lang');
+  }
+  console.log('PASS code controls: reader/editor/dialog geometry, view-only state, blank lines, selection, undo, language, disk save/reopen and CSP');
+};
+if (process.versions.electron && process.argv.some(arg => path.resolve(arg) === __filename)) {
+  const { app } = require('electron');
+  const profile = require('node:fs').mkdtempSync(path.join(process.env.TMPDIR || app.getPath('temp'), 'mdview-code-profile-'));
+  app.setPath('userData', profile); app.disableHardwareAcceleration();
+  const timeout = setTimeout(() => { console.error('code controls timeout'); app.exit(1); }, 60000);
+  require('../src/main.cjs').then(async context => {
+    try { assert.ok(context?.win); await module.exports({ ...context, app }); clearTimeout(timeout); app.exit(0); }
+    catch (error) { console.error(error); app.exit(1); }
+  });
+}

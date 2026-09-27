@@ -1,19 +1,26 @@
-/* Paragraph-style adapter: the native select remains the renderer's source of truth. */
+/* Shared select adapter: native values/options/change remain the renderer contract. */
 (() => {
-  const select = document.querySelector('#block-type');
-  if (!select || document.querySelector('#block-type-trigger')) return;
+  const adapters = new Map();
+  let serial = 0;
+  function install(select) {
+  if (adapters.has(select)) return;
+  const id = select.id || `code-language-${++serial}`;
+  const controller = new AbortController();
+  const signal = controller.signal;
   const trigger = document.createElement('button');
-  trigger.id = 'block-type-trigger';
+  trigger.id = `${id}-trigger`;
   trigger.className = 'paragraph-select-trigger';
+  if (select.matches('.code-language')) trigger.classList.add('code-language-trigger');
+  else if (id !== 'block-type') trigger.classList.add('settings-select-trigger');
   trigger.type = 'button';
   trigger.setAttribute('role', 'combobox');
   trigger.setAttribute('aria-haspopup', 'listbox');
   trigger.setAttribute('aria-expanded', 'false');
-  trigger.setAttribute('aria-controls', 'block-type-listbox');
-  const label = document.querySelector('label[for="block-type"]');
+  trigger.setAttribute('aria-controls', `${id}-listbox`);
+  const label = select.closest('label')?.querySelector('span') || document.querySelector(`label[for="${id}"]`);
   if (label) {
-    label.id = label.id || 'block-type-label';
-    label.htmlFor = trigger.id;
+    label.id = label.id || `${id}-label`;
+    if (label.tagName === 'LABEL') label.htmlFor = trigger.id;
     trigger.setAttribute('aria-labelledby', label.id);
   }
   const value = document.createElement('span');
@@ -23,14 +30,18 @@
   chevron.setAttribute('aria-hidden', 'true');
   trigger.append(value, chevron);
   const menu = document.createElement('div');
-  menu.id = 'block-type-listbox';
+  menu.id = `${id}-listbox`;
   menu.className = 'paragraph-select-menu';
   menu.setAttribute('role', 'listbox');
   menu.setAttribute('popover', 'manual');
   if (label) menu.setAttribute('aria-labelledby', label.id);
-  const items = [...select.options].map((option, index) => {
+  else menu.setAttribute('aria-labelledby', trigger.id);
+  let items = [];
+  function rebuild() {
+  menu.replaceChildren();
+  items = [...select.options].map((option, index) => {
     const item = document.createElement('div');
-    item.id = `block-type-option-${index}`;
+    item.id = `${id}-option-${index}`;
     item.className = 'paragraph-select-option';
     item.setAttribute('role', 'option');
     item.dataset.value = option.value;
@@ -46,9 +57,11 @@
     menu.append(item);
     return item;
   });
+  }
+  rebuild();
   select.hidden = true;
   select.after(trigger);
-  document.body.append(menu); // Top layer avoids the inspector's overflow clipping.
+  (select.closest('dialog') || document.body).append(menu); // Modal descendants are not inert.
   let active = 0;
   let openedValue = null;
   let typeahead = '';
@@ -76,17 +89,19 @@
     if (!available()) { close(); return; }
     const rect = trigger.getBoundingClientRect();
     const gap = 5, edge = 8;
-    const width = Math.min(rect.width, innerWidth - edge * 2);
+    const width = Math.min(Math.max(rect.width, select.matches('.code-language') ? 220 : 0), innerWidth - edge * 2);
     menu.style.width = `${width}px`;
     menu.style.left = `${Math.max(edge, Math.min(rect.left, innerWidth - width - edge))}px`;
     const below = innerHeight - rect.bottom - gap - edge;
     const above = rect.top - gap - edge;
     const useAbove = below < Math.min(menu.scrollHeight + 2, 270) && above > below;
-    menu.style.maxHeight = `${Math.max(0, useAbove ? above : below)}px`;
+    menu.style.maxHeight = `${Math.max(0, Math.min(320, useAbove ? above : below))}px`;
     menu.style.top = `${useAbove ? Math.max(edge, rect.top - gap - menu.getBoundingClientRect().height) : rect.bottom + gap}px`;
   }
   function sync() {
+    if (items.length !== select.options.length || items.some((item, i) => item.dataset.value !== select.options[i].value)) rebuild();
     trigger.disabled = select.disabled;
+    if (!label) trigger.setAttribute('aria-label', document.documentElement.lang === 'en' ? 'Code language' : '代码语言');
     setText(value, select.selectedOptions[0]?.textContent || '');
     items.forEach((item, index) => {
       const option = select.options[index];
@@ -120,6 +135,7 @@
   trigger.addEventListener('mousedown', event => event.preventDefault());
   trigger.addEventListener('click', () => isOpen() ? close() : open());
   trigger.addEventListener('keydown', event => {
+    event.stopPropagation();
     if (event.key === 'Tab') { close(); return; }
     if (event.key === 'Escape') {
       if (isOpen()) { event.preventDefault(); event.stopPropagation(); close(); }
@@ -150,21 +166,42 @@
   });
   document.addEventListener('pointerdown', event => {
     if (!trigger.contains(event.target) && !menu.contains(event.target)) close();
-  }, true);
+  }, { capture: true, signal });
   document.addEventListener('focusin', event => {
     if (!trigger.contains(event.target) && !menu.contains(event.target)) close();
-  });
-  window.addEventListener('blur', close);
-  window.addEventListener('resize', position);
+  }, { signal });
+  window.addEventListener('blur', close, { signal });
+  window.addEventListener('resize', position, { signal });
+  select.closest('dialog')?.addEventListener('close', close, { signal });
   document.addEventListener('scroll', event => {
     if (isOpen() && !menu.contains(event.target)) close();
-  }, true);
-  select.addEventListener('change', sync);
-  select.addEventListener('paragraph-style-sync', sync);
+  }, { capture: true, signal });
+  select.addEventListener('change', sync, { signal });
+  select.addEventListener('paragraph-style-sync', sync, { signal });
+  // NodeView undo and settings write properties, which MutationObserver cannot see.
+  const descriptors = ['value', 'selectedIndex'].map(name => [name, Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, name)]);
+  for (const [name, descriptor] of descriptors) Object.defineProperty(select, name, {
+    configurable: true, get() { return descriptor.get.call(this); },
+    set(value) { descriptor.set.call(this, value); sync(); }
+  });
+  for (const type of ['pointerdown', 'mousedown', 'click', 'keydown']) menu.addEventListener(type, event => event.stopPropagation());
+  trigger.addEventListener('click', event => event.stopPropagation());
   const observer = new MutationObserver(sync);
   observer.observe(select, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['disabled'] });
   for (const panel of document.querySelectorAll('#editor-tools, #editor-panel-body')) {
     observer.observe(panel, { attributes: true, attributeFilter: ['hidden', 'class'] });
   }
   sync();
+  adapters.set(select, () => {
+    close(); controller.abort(); observer.disconnect(); menu.remove(); trigger.remove();
+    for (const [name] of descriptors) delete select[name];
+    adapters.delete(select);
+  });
+  }
+  function scan() {
+    for (const [select, destroy] of adapters) if (!select.isConnected) destroy();
+    document.querySelectorAll('#block-type, #ui-language, #theme, #editor-content select.code-language').forEach(install);
+  }
+  new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
+  scan();
 })();

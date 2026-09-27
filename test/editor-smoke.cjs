@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { dialog } = require('electron');
 module.exports = async ({ win, openDocument, app }) => {
+  require('./unsaved-driver.cjs')(win);
   const run = code => win.webContents.executeJavaScript(code, true);
   await run("if (codeDialog.open) codeDialog.close()");
   const { Menu } = require('electron');

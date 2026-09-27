@@ -1,5 +1,12 @@
 // Chinese source strings are stable keys; only application chrome is translated.
 const english = {
+  '快捷键速查': 'Keyboard shortcuts',
+  '搜索当前文档': 'Find in current document', '搜索所有打开的文档': 'Find in all open documents',
+  '搜索文档内容': 'Search document contents', '搜索范围': 'Search scope', '当前文档': 'Current document', '所有打开的文档': 'All open documents',
+  '区分大小写': 'Match case', '上一个匹配（Shift+Enter）': 'Previous match (Shift+Enter)', '下一个匹配（Enter）': 'Next match (Enter)',
+  '关闭搜索（Escape）': 'Close search (Escape)', '搜索结果': 'Search results', '正在搜索…': 'Searching…',
+  '输入文字以搜索': 'Type to search', '没有匹配': 'No matches', '{index} / {total} 个匹配': '{index} / {total} matches',
+  '仅显示前 {limit} 个': 'Showing first {limit} only', '搜索未完成，请重试。': 'Search failed. Please retry.',
   '侧边栏视图': 'Sidebar views', '搜索已打开的文件': 'Search open files',
   '没有匹配的已打开文件': 'No matching open files', '没有已打开的文件': 'No open files',
   '未保存的更改': 'Unsaved changes', '调整侧边栏宽度': 'Resize sidebar',

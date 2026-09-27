@@ -7,6 +7,7 @@ const { viewState, pathKey, MAX_TABS } = require('./workspace-session.cjs');
 
 module.exports = function editingSession(win, trusted, welcome, getSettings, persist = () => {}, commit = () => false) {
   const t = key => translate(key, getSettings().language);
+  const askUnsaved = require('./confirm-dialog.cjs')(win, trusted);
   const displayName = tab => tab.document.path ? tab.document.name : t('未命名.md');
   const tabs = [];
   let active = null;
@@ -18,7 +19,7 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   const refreshTitle = () => win.setTitle(`${active?.dirty ? '● ' : ''}${active ? displayName(active) : 'MdView'} — MdView`);
   const snapshot = () => ({ version: 2, tabs: tabs.map(tab => ({ path: tab.document.path, viewState: tab.viewState, ...(!tab.document.path ? { source: tab.source } : {}) })), activeIndex: Math.max(0, tabs.indexOf(active)) });
   const pushTabs = () => { refreshTitle(); send('tabs', summary()); persist(snapshot()); };
-  const documentPayload = tab => ({ ...tab.document, source: tab.source, editorHtml: renderEditorHtml(tab.source), id: tab.id, viewState: { ...tab.viewState } });
+  const documentPayload = tab => ({ ...tab.document, ...(tab.preview?.source === tab.source ? tab.preview : {}), source: tab.source, editorHtml: renderEditorHtml(tab.source), id: tab.id, viewState: { ...tab.viewState } });
   const findById = id => tabs.find(tab => tab.id === id);
 
   function setActive(tab, { edit = tab.viewState.editing, notify = true } = {}) {
@@ -32,7 +33,7 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
     if (!document || !document.path) return;
     const existing = tabs.find(tab => tab.document.path && pathKey(tab.document.path) === pathKey(document.path));
     if (existing) {
-      if (reload) { existing.document = document; existing.source = document.source; existing.dirty = false; }
+      if (reload) { existing.document = document; existing.source = document.source; existing.dirty = false; existing.preview = null; }
       if (reload || existing !== active) setActive(existing);
       return;
     }
@@ -52,6 +53,7 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   function updateSource(id, source) {
     const tab = findById(id);
     if (!tab || typeof source !== 'string' || Buffer.byteLength(source) > MAX_DOCUMENT) throw Error('文档已切换或内容超过 10 MB。');
+    if (tab.source !== source) tab.preview = null;
     tab.source = source;
     tab.dirty = source !== tab.document.source;
     pushTabs();
@@ -102,9 +104,9 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
 
   async function confirmDirty(tab) {
     if (!tab.dirty) return true;
-    const { response } = await dialog.showMessageBox(win, { type: 'question', message: t('「{name}」有未保存的修改').replace('{name}', displayName(tab)), buttons: ['保存', '不保存', '取消'].map(t), defaultId: 2, cancelId: 2 });
-    if (response === 2) return false;
-    if (response === 1) return true;
+    const response = await askUnsaved({ name: displayName(tab), language: getSettings().language });
+    if (response === 'cancel') return false;
+    if (response === 'discard') return true;
     return (await saveTab(tab, false)).ok && !tab.dirty;
   }
 
@@ -138,8 +140,15 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   }
 
   async function confirmLeaveActive() {
-    if (!active || !active.dirty) return true;
-    return confirmDirty(active);
+    const result = await exclusive(async () => {
+      const latest = await win.webContents.executeJavaScript('window.mdviewPrepareClose()');
+      if (!active) return latest === null;
+      if (!latest || latest.id !== active.id || typeof latest.source !== 'string') return false;
+      updateSource(active.id, latest.source);
+      return confirmDirty(active);
+    });
+    if (result?.message) send('edit-error', result.message);
+    return result === true;
   }
 
   ipcMain.on('workspace-view', (event, payload) => {
@@ -154,12 +163,33 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   ipcMain.handle('save', (event, payload) => { trusted(event); return exclusive(async () => { updateSource(payload.id, payload.source); return saveTab(active, payload.asNew); }); });
   ipcMain.handle('switch-tab', (event, payload) => { trusted(event); return exclusive(() => switchTab(payload.id, payload.source)); });
   ipcMain.handle('close-tab', (event, payload) => { trusted(event); return closeTab(payload.id, payload.source); });
+  const contentSearch = require('./content-search-service.cjs')();
+  win.on('closed', () => contentSearch.cancel());
+  ipcMain.on('cancel-content-search', event => { trusted(event); contentSearch.cancel(); });
+  ipcMain.handle('search-document', async (event, request) => {
+    trusted(event);
+    if (!request || typeof request.query !== 'string' || request.query.length > 256 ||
+        !Number.isInteger(request.id) || !Number.isInteger(request.limit) || request.limit < 0 || request.limit > 500) throw Error('Invalid search');
+    // Flush only the live active tab; this endpoint cannot access arbitrary paths.
+    if (request.active) {
+      if (request.active.id !== active?.id || typeof request.active.source !== 'string') return null;
+      if (request.active.source !== active.source) updateSource(active.id, request.active.source);
+    }
+    const tab = findById(request.id);
+    if (!tab) return null;
+    const source = tab.source;
+    const result = await contentSearch.search({ source, query: request.query, caseSensitive: request.caseSensitive === true, limit: request.limit });
+    return findById(request.id) === tab && source === tab.source ? result : null;
+  });
   ipcMain.handle('preview', async (event, payload) => {
     trusted(event);
     const tab = findById(payload.id);
     if (!tab || typeof payload.source !== 'string' || Buffer.byteLength(payload.source) > MAX_DOCUMENT) throw Error('无效文档');
     const current = tab.document;
-    return { ...current, ...await renderMarkdown(payload.source, current.path ? path.dirname(current.path) : getSettings().saveDirectory), source: payload.source, characters: payload.source.length, id: payload.id };
+    const rendered = { ...await renderMarkdown(payload.source, current.path ? path.dirname(current.path) : getSettings().saveDirectory), source: payload.source, characters: payload.source.length };
+    // Keep the draft reader view with its source, not the original disk HTML.
+    if (findById(payload.id) === tab && tab.source === payload.source) tab.preview = rendered;
+    return { ...current, ...rendered, id: payload.id };
   });
   win.on('close', event => {
     event.preventDefault();

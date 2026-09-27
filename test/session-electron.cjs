@@ -24,6 +24,7 @@ app.on('browser-window-created', (_event, win) => {
 });
 (async () => {
   const { win, editSession, openDocument, sessionStore } = await require('../src/main.cjs');
+  require('./unsaved-driver.cjs')(win);
   win.showInactive();
   const send = win.webContents.send.bind(win.webContents);
   win.webContents.send = (channel, ...args) => { if (channel === 'edit-error') console.error('EDIT ERROR', ...args); return send(channel, ...args); };

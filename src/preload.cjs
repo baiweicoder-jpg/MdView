@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('mdview', {
+  onUnsavedConfirm: callback => ipcRenderer.on('unsaved-confirm', (_event, question) => callback(question)),
+  onUnsavedConfirmDismiss: callback => ipcRenderer.on('unsaved-confirm-dismiss', (_event, id) => callback(id)),
+  answerUnsavedConfirm: (id, choice) => ipcRenderer.send('unsaved-confirm-answer', { id, choice }),
   pasteImage: bytes => ipcRenderer.invoke('paste-image', bytes),
   getLinkIcon: target => ipcRenderer.invoke('link-icon', target),
   getMenuBar: () => ipcRenderer.invoke('get-menu-bar'),
@@ -14,6 +17,8 @@ contextBridge.exposeInMainWorld('mdview', {
   menuState: state => ipcRenderer.send('menu-state', state),
   onMenuAction: callback => ipcRenderer.on('menu-action', (_event, action, value) => callback(action, value)),
   save: payload => ipcRenderer.invoke('save', payload),
+  searchDocument: request => ipcRenderer.invoke('search-document', request),
+  cancelContentSearch: () => ipcRenderer.send('cancel-content-search'),
   preview: payload => ipcRenderer.invoke('preview', payload),
   onSaved: callback => ipcRenderer.on('saved', (_event, value) => callback(value)),
   onBusy: callback => ipcRenderer.on('file-busy', (_event, value) => callback(value)),

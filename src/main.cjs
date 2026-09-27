@@ -104,28 +104,41 @@ module.exports = app.whenReady().then(async () => {
     if (typeof text === 'string' && text.length <= 10 * 1024 * 1024) require('electron').clipboard.writeText(text);
   });
   const menuState = {};
+  const { accelerator: shortcutAccelerator } = require('./shortcuts-data.js');
   function localizeMenu(items) {
-    return items.map(item => ({ ...item, ...(item.label ? { label: t(item.label) } : {}), ...(Array.isArray(item.submenu) ? { submenu: localizeMenu(item.submenu) } : {}) }));
+    return items.map(item => ({
+      ...item,
+      ...(item.click ? { click: (...args) => {
+        if (menuState.shortcutHelpOpen === true && item.id !== 'keyboard-shortcuts') return;
+        return item.click(...args);
+      } } : {}),
+      ...(item.label ? { label: t(item.label) } : {}),
+      ...(Array.isArray(item.submenu) ? { submenu: localizeMenu(item.submenu) } : {})
+    }));
   }
   function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(localizeMenu([
     { label: '文件', submenu: [
-      { label: '新建空白文档', accelerator: 'Ctrl+N', click: newDocument },
-      { label: '打开 Markdown…', accelerator: 'Ctrl+O', click: chooseDocument },
-      { label: '重新读取', accelerator: 'Ctrl+R', click: () => reloadDocument() },
-      { label: '保存', accelerator: 'Ctrl+S', click: () => win.webContents.send('save-request', false) },
-      { label: '另存为', accelerator: 'Ctrl+Shift+S', click: () => win.webContents.send('save-request', true) },
+      { label: '新建空白文档', accelerator: shortcutAccelerator('new'), click: newDocument },
+      { label: '打开 Markdown…', accelerator: shortcutAccelerator('open'), click: chooseDocument },
+      { label: '重新读取', accelerator: shortcutAccelerator('reload'), click: () => reloadDocument() },
+      { label: '保存', accelerator: shortcutAccelerator('save'), click: () => win.webContents.send('save-request', false) },
+      { label: '另存为', accelerator: shortcutAccelerator('save-as'), click: () => win.webContents.send('save-request', true) },
 
       { type: 'separator' },
-      { label: '下一个标签', accelerator: 'Ctrl+Tab', click: () => win.webContents.send('next-tab-request') },
-      { label: '上一个标签', accelerator: 'Ctrl+Shift+Tab', click: () => win.webContents.send('previous-tab-request') },
-      { label: '关闭标签', accelerator: 'Ctrl+W', click: () => win.webContents.send('close-tab-request') },
+      { label: '下一个标签', accelerator: shortcutAccelerator('next-tab'), click: () => win.webContents.send('next-tab-request') },
+      { label: '上一个标签', accelerator: shortcutAccelerator('previous-tab'), click: () => win.webContents.send('previous-tab-request') },
+      { label: '关闭标签', accelerator: shortcutAccelerator('close-tab'), click: () => win.webContents.send('close-tab-request') },
       { type: 'separator' }, { label: '退出', role: 'quit' }
     ] },
     { label: '编辑', submenu: [
-      { id: 'edit-mode', label: '编辑模式', type: 'checkbox', accelerator: 'Ctrl+E', click: () => win.webContents.send('toggle-edit') }
+      { label: '搜索当前文档', accelerator: shortcutAccelerator('find'), click: () => win.webContents.send('menu-action', 'find', 'current') },
+      { label: '搜索所有打开的文档', accelerator: shortcutAccelerator('find-all'), click: () => win.webContents.send('menu-action', 'find', 'all') },
+      { id: 'edit-mode', label: '编辑模式', type: 'checkbox', accelerator: shortcutAccelerator('edit-mode'), click: () => win.webContents.send('toggle-edit') }
     ] },
     { label: '查看', submenu: [
+      { id: 'keyboard-shortcuts', label: '快捷键速查', accelerator: shortcutAccelerator('keyboard-shortcuts'), click: () => win.webContents.send('menu-action', 'shortcuts') },
+      { type: 'separator' },
       { label: '主题', submenu: ['system', 'light', 'dark', 'warm'].map((theme, index) => ({
         id: `theme-${theme}`, label: ['跟随系统', '浅色', '深色', '暖纸'][index], type: 'radio',
         click: () => win.webContents.send('menu-action', 'theme', theme)
@@ -134,12 +147,12 @@ module.exports = app.whenReady().then(async () => {
       { id: 'font-down', label: '减小正文字号', click: () => win.webContents.send('menu-action', 'font', -1) },
       { label: '重置正文字号', click: () => win.webContents.send('menu-action', 'font-reset') },
       { type: 'separator' },
-      { label: '切换目录', accelerator: 'Ctrl+Shift+B', click: () => win.webContents.send('toggle-outline') },
+      { label: '切换目录', accelerator: shortcutAccelerator('outline'), click: () => win.webContents.send('toggle-outline') },
       { label: '全屏', role: 'togglefullscreen' }, { type: 'separator' },
       { label: '放大界面', role: 'zoomIn' }, { label: '缩小界面', role: 'zoomOut' }, { label: '重置缩放', role: 'resetZoom' }
     ] },
     { label: '设置', submenu: [
-      { label: '偏好设置…', accelerator: 'Ctrl+,', click: () => win.webContents.send('menu-action', 'settings') },
+      { label: '偏好设置…', accelerator: shortcutAccelerator('settings'), click: () => win.webContents.send('menu-action', 'settings') },
       { label: '界面语言', submenu: [
         { id: 'language-zh-CN', label: '简体中文', type: 'radio', checked: uiLanguage === 'zh-CN', click: () => win.webContents.send('menu-action', 'language', 'zh-CN') },
         { id: 'language-en', label: 'English', type: 'radio', checked: uiLanguage === 'en', click: () => win.webContents.send('menu-action', 'language', 'en') }
@@ -153,6 +166,7 @@ module.exports = app.whenReady().then(async () => {
   }
   function syncMenuState(state) {
     const menu = Menu.getApplicationMenu();
+    win.webContents.setIgnoreMenuShortcuts(menuState.shortcutHelpOpen === true);
     if (['system', 'light', 'dark', 'warm'].includes(state.theme)) menu.getMenuItemById(`theme-${state.theme}`).checked = true;
     if (Number.isInteger(state.fontSize)) {
       menu.getMenuItemById('font-up').enabled = state.fontSize < 24;
@@ -190,6 +204,7 @@ module.exports = app.whenReady().then(async () => {
   });
   let altAlone = false;
   win.webContents.on('before-input-event', (event, input) => {
+    if (menuState.shortcutHelpOpen === true) { altAlone = false; return; }
     if (input.key === 'Alt') {
       event.preventDefault();
       if (input.type === 'keyDown') altAlone = !input.isAutoRepeat;

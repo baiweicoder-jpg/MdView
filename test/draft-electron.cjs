@@ -13,6 +13,7 @@ app.on('browser-window-created', (_event, win) => {
 const sources = ['# 中文 🐋\n\n**粗体** 和 *斜体*\n\n- [x] 完成\n', '## 日本語 café\n\n```js\nconst x = "🐋";\n```\n\n最后一笔'];
 (async () => {
   const {win,editSession,sessionStore} = await require('../src/main.cjs');
+  require('./unsaved-driver.cjs')(win);
   win.showInactive();
   const run = code => win.webContents.executeJavaScript(code,true);
   const wait = async check => { for(let i=0;i<200;i++){if(await check())return;await new Promise(r=>setTimeout(r,25));}assert.fail('renderer did not settle'); };

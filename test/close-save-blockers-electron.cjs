@@ -13,6 +13,7 @@ app.on('browser-window-created', (_event, win) => {
 process.on('uncaughtException', error => { console.error(error); app.exit(1); });
 (async () => {
   const { win, editSession } = await require('../src/main.cjs');
+  require('./unsaved-driver.cjs')(win);
   const run = code => win.webContents.executeJavaScript(code, true);
   const wait = async check => {
     for (let i = 0; i < 200; i++) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 25)); }
