@@ -86,5 +86,12 @@ module.exports = async function settings(win, trusted, onLanguageChanged = () =>
     });
   });
   ipcMain.handle('reset-save-directory', event => { trusted(event); return change(() => update('')); });
+  // Open follows an explicitly configured, existing folder only. Otherwise let
+  // the native picker retain its usual last-used-directory behavior; never mkdir.
+  get.openDirectory = async () => {
+    if (!saveDirectory) return undefined;
+    try { return (await fs.stat(saveDirectory)).isDirectory() ? saveDirectory : undefined; }
+    catch { return undefined; }
+  };
   return get;
 };

@@ -57,13 +57,14 @@
     &:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"],
         [aria-busy="true"] *, [inert] *)) {
       transition: box-shadow 140ms ease-out;
-      /* Lift only the decorative face, never the original hit rectangle. */
-      > :is([data-icon], .tab-name) { transition: transform 140ms ease-out; }
-      &:hover > :is([data-icon], .tab-name) {
+      /* Lift icons only. Transforming filename glyphs blurs text on hover;
+         labels and hit rectangles stay on their original rendering plane. */
+      > [data-icon] { transition: transform 140ms ease-out; }
+      &:hover > [data-icon] {
         transform: perspective(400px) translate3d(0, -1px, 2px) rotateX(4deg);
       }
       &:active { transition-duration: 55ms; }
-      &:active > :is([data-icon], .tab-name) {
+      &:active > [data-icon] {
         transform: perspective(400px) translate3d(0, 0, -1px);
         transition-duration: 55ms;
       }

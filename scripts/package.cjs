@@ -7,7 +7,9 @@ async function build() {
     asar: true, prune: true,
     icon: path.join(__dirname, '..', 'src', 'assets', 'mdview.ico'),
     download: { checksums: require('electron/checksums.json') },
-    ignore: [/^\/artifacts($|\/)/, /^\/dist($|\/)/, /^\/scripts($|\/)/, /^\/build($|\/)/],
+    // Only application inputs may enter the package. In particular, never traverse
+    // adjacent portable profiles, loose installers, credentials or workspace files.
+    ignore: file => file !== '' && file !== '/' && !/^\/(?:src|test|examples|node_modules)(?:\/|$)/.test(file) && file !== '/package.json',
     win32metadata: { CompanyName: 'MdView', FileDescription: 'MdView Markdown Reader', ProductName: 'MdView' }
   });
   console.log(`Windows 应用：${outputs.join('\n')}`);

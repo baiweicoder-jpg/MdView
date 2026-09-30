@@ -61,11 +61,40 @@ app.on('browser-window-created', (_e, win) => { win.setOpacity(0); win.webConten
     await wait('!fileBusy');
     for(let i=0;i<100&&(await clipboard.readText())!==first;i++) await new Promise(r=>setTimeout(r,25));
     assert.equal(await clipboard.readText(), first, 'real Electron44 async clipboard');
+    const sidebarMenu = async (id, choice, keyboard = false) => {
+      nativeMenu = null;
+      await run("$('#sidebar-tab-files').click()");
+      const selector = `#opened-files-list .sidebar-file[data-id="${id}"]`;
+      if (keyboard) {
+        await run(`document.querySelector(${JSON.stringify(selector)}).focus()`);
+        win.focus();
+        win.webContents.sendInputEvent({type:'keyDown',keyCode:'F10',modifiers:['shift']});
+        win.webContents.sendInputEvent({type:'keyUp',keyCode:'F10',modifiers:['shift']});
+      } else {
+        const point = await run(`(() => {const r=document.querySelector(${JSON.stringify(selector + ' .tab-name')}).getBoundingClientRect(); return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
+        win.focus();
+        win.webContents.sendInputEvent({type:'mouseDown',button:'right',clickCount:1,...point});
+        win.webContents.sendInputEvent({type:'mouseUp',button:'right',clickCount:1,...point});
+      }
+      for(let i=0;i<100&&!nativeMenu;i++) await new Promise(r=>setTimeout(r,25));
+      assert.ok(nativeMenu, 'sidebar item opens the real native file menu');
+      assert.deepEqual(nativeMenu.items.filter(i=>i.id).map(i=>i.id), ['copy-path','reveal','rename']);
+      if (choice) nativeMenu.getMenuItemById(choice).click();
+      nativeMenu.closePopup(win);
+    };
+    await sidebarMenu(firstId, 'copy-path');
+    await wait('!fileBusy');
+    assert.equal(await clipboard.readText(), first);
+    assert.equal(await run('currentDocument.id'), secondId, 'sidebar right click does not activate the target');
     let revealed;
     shell.showItemInFolder = file => { revealed = file; };
-    assert.equal((await action(firstId, 'reveal')).ok, true); assert.equal(revealed, first);
+    await sidebarMenu(firstId, 'reveal', true);
+    for(let i=0;i<100&&!revealed;i++) await new Promise(r=>setTimeout(r,25));
+    await wait('!fileBusy');
+    assert.equal(revealed, first);
     assert.equal(await run('payload().source'), secondDraft);
-    await beginRename(firstId);
+    await sidebarMenu(firstId, 'rename');
+    await wait("$('#rename-dialog').open");
     const { dialog } = require('electron');
     const originalOpen = dialog.showOpenDialog; let openedDuringRename = false;
     dialog.showOpenDialog = async () => { openedDuringRename = true; return {canceled:true,filePaths:[]}; };
@@ -80,7 +109,10 @@ app.on('browser-window-created', (_e, win) => { win.setOpacity(0); win.webConten
       assert.ok(fs.existsSync(first)); assert.equal(fs.readFileSync(second,'utf8'),'# Other\n');
     }
     await cancel(); assert.equal(await run('payload().source'), secondDraft);
-    await beginRename(firstId);
+    // Filtering rebuilds the rows; delegated menus still address the stable ID.
+    await run("$('#opened-files-search').value='first'; $('#opened-files-search').dispatchEvent(new Event('input'))");
+    await sidebarMenu(firstId, 'rename');
+    await wait("$('#rename-dialog').open");
     const renamed = path.join(root, '新 filename.markdown');
     await run("$('#rename-name').select()");
     win.webContents.insertText(path.basename(renamed));
@@ -92,6 +124,9 @@ app.on('browser-window-created', (_e, win) => { win.setOpacity(0); win.webConten
     assert.equal(await run('currentDocument.id'), secondId); assert.equal(await run('payload().source'), secondDraft);
     assert.equal(await run(`tabs.find(t=>t.id===${firstId}).dirty`), true);
     assert.equal(editSession.snapshot().tabs.find(t=>t.path===renamed).path, renamed);
+    await run("$('#opened-files-search').value=''; $('#opened-files-search').dispatchEvent(new Event('input'))");
+    assert.equal(await run(`document.querySelector('#opened-files-list .sidebar-file[data-id="${firstId}"]').title`), renamed);
+    assert.equal(await run(`document.querySelector('#opened-files-list .sidebar-file[data-id="${firstId}"]').classList.contains('dirty')`), true);
     await run(`switchToTab(${firstId})`); await wait('!restoringView');
     assert.equal(await run('payload().source'), firstDraft);
     assert.equal(await run("richEditor.editor.getText().includes('draft A')"), true);
@@ -133,6 +168,8 @@ app.on('browser-window-created', (_e, win) => { win.setOpacity(0); win.webConten
     await run(`void window.mdview.popupTabMenu({id:${blankId},point:{x:20,y:50}})`);
     for(let i=0;i<100&&!nativeMenu;i++) await new Promise(r=>setTimeout(r,25));
     assert.equal(nativeMenu.items.every(i=>!i.enabled),true); nativeMenu.closePopup(win);
+    await sidebarMenu(blankId, null, true);
+    assert.equal(nativeMenu.items.every(i=>!i.enabled),true, 'sidebar untitled actions require saving first');
     assert.equal((await action(blankId,'copy-path')).ok,false);
     // Actual keyboard-triggered native popup.
     nativeMenu=null;

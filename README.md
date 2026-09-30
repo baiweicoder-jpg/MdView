@@ -1,6 +1,6 @@
 # MdView
 
-Windows 本地 Markdown 阅读器。支持代码语法高亮、目录导航、浅色 / 深色 / 暖纸 / 跟随系统、字号记忆、拖入文件、代码复制及相对路径图片。
+Windows 本地 Markdown 阅读器。支持代码语法高亮、目录导航、浅色 / 深色 / 暖纸 / 审阅纸 / 跟随系统、字号记忆、拖入文件、代码复制及相对路径图片。
 
 ## 开发与验证
 
@@ -48,9 +48,13 @@ npm run release
 - 通过「设置 → 偏好设置」指定默认保存文件夹，设置会持久保存，也可恢复系统文档目录。新建文档与「另存为」默认使用此文件夹；已有文件的普通保存仍写回原位置。
 - 顶部使用紧凑的单行菜单栏，左侧菜单弹出原生菜单，右侧显示快捷图标，不额外增加工具栏。默认显示编辑、保存、打开、新建；「设置 → 偏好设置 → 菜单栏快捷操作」可勾选配置，也可全部隐藏。支持 F10 / Alt 聚焦菜单和方向键导航，原有快捷键保留。
 - 支持同时打开多个文件（类似 Notepad++）：顶部标签栏并列显示，点击切换，带未保存圆点标记，`×` 关闭单个标签。新建或打开文件会追加标签而非替换；打开已打开的文件则切到对应标签。`Ctrl+Tab` / `Ctrl+Shift+Tab` 循环切换，`Ctrl+W` 关闭当前标签；单独关闭未保存标签仍询问保存 / 不保存 / 取消，选择不保存会删除该标签的恢复内容。
-- `Ctrl+O` 打开；`Ctrl+R` 重新读取；`Ctrl+Shift+B` 切换目录；`F11` 全屏。
+- `Ctrl+O` 或「打开 Markdown…」可在原生文件选择框中一次选择多份 `.md` / `.markdown` 文件（Ctrl / Shift 多选），按选择框返回的顺序追加标签，最后一份成功打开的文件为当前标签；重复路径仅切换已有标签，保留未保存草稿。部分文件无效或无法读取时继续打开其余文件，并显示包含文件路径的错误。取消不改变文档；沿用 100 标签及单文件 10 MB 限制。
+- 打开选择框优先定位到已配置且仍存在的默认保存文件夹；未配置、目录被移动 / 删除或不可访问时保留系统选择框的默认行为，不创建目录、不修改保存设置。
+- **Open Markdown (Ctrl+O)** supports selecting multiple `.md` / `.markdown` files. Tabs follow the picker’s returned order; the last successful file becomes active. Existing tabs and unsaved drafts are preserved, duplicates switch tabs, and a failed file does not stop later files (errors include paths). Cancel leaves documents unchanged. The picker starts in the configured default save folder when it exists; otherwise it uses the native default without creating folders. The existing 100-tab / 10 MB limits still apply.
+- `Ctrl+R` 重新读取；`Ctrl+Shift+B` 切换目录；`F11` 全屏。
 - 选择「编辑 → 编辑模式」或 `Ctrl+E`，直接在渲染内容中输入。右侧「格式」面板按文字样式、段落与内容、表格、编辑历史分组，可点击右上角按钮折叠 / 展开（记忆状态）；选中标题或加粗等内容时面板自动高亮对应按钮，表格操作仅在光标位于表格内时可用。`Ctrl+B` 加粗，`Ctrl+S` 保存，`Ctrl+Shift+S` 另存为。再次切换「编辑模式」返回阅读，不会自动保存。
 - 已有文件未保存时关闭或重新读取会询问保存 / 不保存 / 取消。磁盘文件被其他程序修改后拒绝覆盖，可另存为保留草稿。欢迎文档必须另存为。
+- 在「查看 → 主题」或「设置 → 偏好设置 → 阅读外观」选择 **审阅纸 / Review paper**：暖灰纸底、衬线标题、灰青强调色，行内代码、引用与表格使用同色系背景；深色代码区采用低饱和蓝、青、鼠尾草绿与砂金色高亮。正文取消固定宽度上限，随窗口和侧栏 / 格式面板占用的空间动态伸缩，左右保留自适应留白。阅读、编辑与单独查看代码共用配色，保留复制、折叠、换行、缩放和语言选择；主题只改变显示，不插入报告专用卡片或改写 Markdown。主题回归可运行 `npm run test:theme`，也包含在完整验收链中。
 - 主题与字号在本机保存；文档内容不上传。进入编辑但未修改时保留原文；修改后保存会规范化 Markdown 排版，UTF-8 BOM 与原换行格式保留。
 - 阅读和编辑模式均支持 `Ctrl`＋鼠标滚轮：向上放大、向下缩小正文字号（13–24 px），设置中的字号同步更新并记忆；仅调整显示，不修改文档内容。普通滚轮仍滚动文档。
 - 每个代码块提供「折叠 / 展开」及「换行 / 不换行」；阅读、编辑和单独查看弹框均可用，仅影响当前块的显示，不修改 Markdown，重新打开后复原。长单词也能换行，关闭换行后恢复横向滚动。

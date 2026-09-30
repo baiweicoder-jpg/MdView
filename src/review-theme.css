@@ -1,0 +1,78 @@
+/* Review paper: editorial reading surface, shared by reader and rich editor.
+   Theme only: do not wrap Markdown nodes or alter serialized document content. */
+:root[data-theme="review"] {
+  color-scheme: light;
+  --bg: #f5f4ef; --surface: #fbfaf6; --sidebar: #eeede7; --text: #303b3c;
+  --muted: #66716f; --border: #dcded5; --accent: #38676b; --accent-soft: #e6eeeb;
+  --heading: #293e40; --code: #e9eeea; --code-bar: #eeede7; --code-text: #3c6265;
+  --keyword: #416a7b; --string: #526b4c; --number: #866640; --comment: #66716f;
+  --function: #38676b; --deletion: #a4554b;
+  --review-inline-border: #d4dfd8; --review-quote-border: #cfdcd5;
+}
+:root[data-theme="review"] #reader {
+  padding-inline: clamp(20px, 3vw, 64px);
+}
+:root[data-theme="review"] #reader > :is(.document-header, .markdown, #notice, .end-mark) {
+  width: 100%; max-width: none; min-width: 0;
+}
+:root[data-theme="review"] .markdown {
+  line-height: 1.8;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+:root[data-theme="review"] .markdown :is(h1, h2, h3, h4, h5, h6) {
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif SC", Georgia, serif;
+  font-weight: 700;
+  line-height: 1.4;
+}
+:root[data-theme="review"] .markdown h1 {
+  font-size: 2.25em; line-height: 1.3; letter-spacing: -.01em;
+  padding-bottom: 24px; margin-bottom: 28px; border-bottom: 1px solid var(--border);
+}
+:root[data-theme="review"] .markdown h2 {
+  font-size: 1.65em; margin-top: 44px; padding-bottom: 12px;
+}
+:root[data-theme="review"] .markdown h3 { font-size: 1.2em; margin-top: 30px; }
+:root[data-theme="review"] .markdown p { margin: 16px 0; }
+:root[data-theme="review"] .markdown li { margin: 6px 0; }
+:root[data-theme="review"] .markdown blockquote {
+  padding: 4px 22px; border: 1px solid var(--review-quote-border); border-radius: 10px;
+  background: var(--accent-soft); color: var(--text);
+}
+:root[data-theme="review"] .markdown code {
+  font-family: "Cascadia Code", "SF Mono", Consolas, monospace;
+}
+:root[data-theme="review"] .markdown :not(pre) > code {
+  border: 1px solid var(--review-inline-border); padding: .12em .38em; border-radius: 5px;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
+:root[data-theme="review"] .markdown table {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+}
+:root[data-theme="review"] .markdown :is(th, td) { padding: 12px 18px; }
+:root[data-theme="review"] .markdown th { background: var(--sidebar); color: var(--heading); }
+:root[data-theme="review"] .markdown tr:nth-child(even) { background: var(--bg); }
+/* Local dark tokens keep editor code controls readable without darkening settings,
+   inline code, format inspector, language popovers or ordinary document text. */
+:root[data-theme="review"] :is(.code-block, .markdown > pre) {
+  color-scheme: dark;
+  --code: #202c30; --code-bar: #29383c; --code-text: #e2e9e5;
+  --border: #425356; --muted: #c1ceca; --text: #e2e9e5; --surface: #29383c;
+  --accent: #a9c9dc; --accent-soft: #394e52;
+  --keyword: #a9c9dc; --string: #bed0ac; --number: #dfc394;
+  --comment: #9dabaa; --function: #9dc9c2; --deletion: #e2aaa0;
+  border-radius: 12px;
+}
+:root[data-theme="review"] .code-toolbar {
+  padding: 8px 16px; border-bottom-color: var(--border);
+}
+:root[data-theme="review"] .markdown pre {
+  line-height: 1.9; padding: 20px 24px; scrollbar-color: #607775 var(--code);
+}
+:root[data-theme="review"] .markdown pre code { color: var(--code-text); }
+:root[data-theme="review"] .code-block .hljs-variable { color: var(--number); }
+:root[data-theme="review"] .markdown ::selection { background: #d3e2dd; color: #293e40; }
+:root[data-theme="review"] .code-block ::selection { background: #456064; color: #fff; }
+@media (max-width: 850px) {
+  :root[data-theme="review"] .markdown h1 { font-size: 1.85em; }
+  :root[data-theme="review"] .markdown pre { padding: 16px; }
+}

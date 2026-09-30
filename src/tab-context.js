@@ -63,20 +63,25 @@
       if (!result.ok && !result.canceled) { $('#notice').textContent = result.message; $('#notice').hidden = false; }
     } catch { toast('操作未完成，请重试。'); }
   }
-  bar.addEventListener('contextmenu', event => {
-    const tab = event.target.closest('.tab');
-    if (!tab) return;
-    event.preventDefault(); event.stopPropagation();
-    void popup(tab, {x:event.clientX, y:event.clientY});
-  });
-  bar.addEventListener('keydown', event => {
-    const tab = event.target.closest('.tab');
-    if (!tab || event.target.closest('.tab-close')) return;
-    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+  // Delegate from stable containers: sidebar.js mounts/rebuilds its file rows
+  // after this module loads. Both surfaces send only the existing stable tab ID.
+  for (const [container, selector] of [[bar, '.tab'], [document.querySelector('#sidebar'), '#opened-files-list .sidebar-file']]) {
+    container?.addEventListener('contextmenu', event => {
+      const tab = event.target.closest(selector);
+      if (!tab) return;
       event.preventDefault(); event.stopPropagation();
-      const rect = tab.getBoundingClientRect(); void popup(tab, { x:rect.left, y:rect.bottom });
-    } else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); tab.click(); }
-  });
+      void popup(tab, {x:event.clientX, y:event.clientY});
+    });
+    container?.addEventListener('keydown', event => {
+      const tab = event.target.closest(selector);
+      if (!tab || event.target.closest('.tab-close')) return;
+      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+        event.preventDefault(); event.stopPropagation();
+        const rect = tab.getBoundingClientRect(); void popup(tab, { x:rect.left, y:rect.bottom });
+      } else if (container === bar && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); tab.click(); }
+      // Sidebar rows are native buttons; keep their normal activation behavior.
+    });
+  }
   api.onRenamed(value => {
     if (scrollByPath.has(value.oldPath)) { scrollByPath.set(value.path, scrollByPath.get(value.oldPath)); scrollByPath.delete(value.oldPath); }
     if (currentDocument?.id !== value.id) return;

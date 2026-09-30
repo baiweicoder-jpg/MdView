@@ -43,8 +43,24 @@ module.exports = async function interactionEffectsSmoke({ win, openDocument, app
   try {
     await media('no-preference');
     assert.equal(await run("matchMedia('(hover:hover) and (pointer:fine)').matches"), true, 'desktop fine pointer');
-    for (const theme of ['light', 'dark', 'warm']) {
+    for (const theme of ['light', 'dark', 'warm', 'review']) {
       await run(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+      await run("document.querySelector('#sidebar-tab-files').click()");
+      for (const textSelector of ['#opened-files-list .sidebar-file > .tab-name', '#tab-bar .tab > .tab-name']) {
+        await move('.document-header');
+        const restingText = await snapshot([textSelector]);
+        await move(textSelector);
+        assert.equal(await run(`document.querySelector(${JSON.stringify(textSelector)}).matches(':hover')`), true, 'native hover reached filename');
+        const hoveredText = await snapshot([textSelector]);
+        assert.equal(hoveredText[0].transform, 'none', `${theme}: filename text must not be rasterized through a hover transform`);
+        assert.deepEqual(hoveredText, restingText, `${theme}: filename geometry remains stable on hover`);
+        await command('Input.dispatchMouseEvent', { type: 'mousePressed', ...await point(textSelector), button: 'left', clickCount: 1 });
+        await delay(90);
+        assert.equal((await snapshot([textSelector]))[0].transform, 'none', `${theme}: pressed filename text stays untransformed`);
+        await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 650, y: 100, buttons: 1 });
+        await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 650, y: 100, button: 'left', clickCount: 1 });
+      }
+      await run("document.querySelector('#sidebar-tab-outline').click()");
       await move('.document-header');
       const rest = await state(selector), bounds = await geometry(), content = await snapshot(protectedSelectors);
       await move(selector);
@@ -85,7 +101,8 @@ module.exports = async function interactionEffectsSmoke({ win, openDocument, app
       colors.push(await run("getComputedStyle(document.querySelector('#menu-bar')).backgroundColor"));
       report.push({ theme, hover: hover.shadow, pressed: pressed.shadow, focus: focus.focus });
     }
-    assert.equal(new Set(colors).size, 3, 'all three actual theme palettes preserved');
+    assert.equal(new Set(colors.slice(0, 3)).size, 3, 'original three chrome palettes preserved');
+    assert.equal(report.length, 4, 'filename rendering checked in all four themes');
     win.webContents.send('file-busy', true);
     await delay(100);
     await move(selector);

@@ -62,13 +62,13 @@ async function changeLanguage(language) {
 const reader = $('#reader');
 const codeDialog = $('#code-dialog');
 let codeDialogTrigger;
-const themeNames = { light: '浅色', dark: '深色', warm: '暖纸' };
+const themeNames = { light: '浅色', dark: '深色', warm: '暖纸', review: '审阅纸' };
 const media = matchMedia('(prefers-color-scheme: dark)');
 let preferences = {};
 try { preferences = JSON.parse(localStorage.getItem('mdview-preferences') || '{}') || {}; } catch {}
 let fontSize = Number.isInteger(preferences.fontSize) ? Math.max(13, Math.min(24, preferences.fontSize)) : 16;
 let toolsCollapsed = preferences.toolsCollapsed === true;
-$('#theme').value = ['system', 'light', 'dark', 'warm'].includes(preferences.theme) ? preferences.theme : 'system';
+$('#theme').value = ['system', ...Object.keys(themeNames)].includes(preferences.theme) ? preferences.theme : 'system';
 function savePreferences() {
   try { localStorage.setItem('mdview-preferences', JSON.stringify({ theme: $('#theme').value, fontSize, toolsCollapsed })); } catch {}
 }
@@ -159,7 +159,7 @@ async function openSettings() {
 window.mdview.onMenuAction((action, value) => {
   if (action === 'settings') perform(openSettings);
   else if (action === 'language') perform(() => changeLanguage(value));
-  else if (action === 'theme' && ['system', 'light', 'dark', 'warm'].includes(value)) { $('#theme').value = value; applyTheme(); }
+  else if (action === 'theme' && ['system', ...Object.keys(themeNames)].includes(value)) { $('#theme').value = value; applyTheme(); }
   else if (action === 'font') changeFont(value);
   else if (action === 'font-reset') { fontSize = 16; applyFont(); }
 });

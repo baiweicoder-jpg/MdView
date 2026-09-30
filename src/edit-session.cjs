@@ -32,16 +32,25 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
 
   function openDocument(document, reload = false) {
     if (busy) return;
+    return acceptDocument(document, reload);
+  }
+
+  function acceptDocument(document, reload = false, notify = true) {
     if (!document || !document.path) return;
     const existing = tabs.find(tab => tab.document.path && pathKey(tab.document.path) === pathKey(document.path));
     if (existing) {
       if (reload) { existing.document = document; existing.source = document.source; existing.dirty = false; existing.preview = null; }
-      if (reload || existing !== active) setActive(existing);
-      return;
+      if (reload || existing !== active) setActive(existing, { notify });
+      return existing;
     }
-    if (tabs.length >= MAX_TABS) { send('edit-error', '最多打开 100 个标签。请先关闭一个标签。'); return; }
+    if (tabs.length >= MAX_TABS) {
+      const message = t('最多打开 100 个标签。请先关闭一个标签。');
+      if (!notify) throw Error(message);
+      send('edit-error', message); return;
+    }
     tabs.push({ id: ++sequence, document, source: document.source, dirty: false, viewState: viewState(document.viewState) });
-    setActive(tabs[tabs.length - 1]);
+    setActive(tabs[tabs.length - 1], { notify });
+    return active;
   }
 
   function newBlank() {
@@ -320,6 +329,34 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
     get file() { return active?.document.path; },
     refreshTitle,
     openDocument,
+    async openDocuments(files) {
+      const result = await exclusive(async () => {
+        const latest = await win.webContents.executeJavaScript('window.mdviewPrepareClose()');
+        if (active) {
+          if (!latest || latest.id !== active.id || typeof latest.source !== 'string') throw Error(t('文档已切换，请重试。'));
+          updateSource(active.id, latest.source);
+          active.viewState = viewState(latest.viewState);
+        } else if (latest !== null) throw Error(t('文档已切换，请重试。'));
+        const previous = active, opened = [], errors = [];
+        // Sequential reads preserve native selection order. Only present the final
+        // tab: intermediate document events can race renderer draft/view capture.
+        for (const file of files) {
+          try {
+            const document = await require('./markdown.cjs').readDocument(file);
+            acceptDocument(document, false, false);
+            opened.push(document.path);
+          } catch (error) {
+            const message = error.code === 'ENOENT' ? '文件不存在或已被移动。' : ['EACCES', 'EPERM'].includes(error.code) ? '无法读取此文件，请检查权限。' : error.message;
+            errors.push(`${file}: ${t(message)}`);
+          }
+        }
+        if (active !== previous) setActive(active);
+        if (errors.length) send('edit-error', errors.join('\n'));
+        return { ok: errors.length === 0, opened, errors };
+      });
+      if (result?.message) send('edit-error', t(result.message));
+      return result;
+    },
     newBlank,
     confirmLeaveActive,
     switchTab,

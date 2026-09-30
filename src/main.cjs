@@ -51,9 +51,14 @@ async function reloadDocument() {
   return loadDocument(file, false, true);
 }
 
+let getSettings;
 async function chooseDocument() {
-  const result = await dialog.showOpenDialog(win, { title: t('打开 Markdown'), properties: ['openFile'], filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }] });
-  if (!result.canceled) await openDocument(result.filePaths[0]);
+  const defaultPath = await getSettings.openDirectory();
+  const result = await dialog.showOpenDialog(win, { title: t('打开 Markdown'), ...(defaultPath ? { defaultPath } : {}), properties: ['openFile', 'multiSelections'], filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }] });
+  if (result.canceled || !result.filePaths.length) return;
+  const opened = await editSession.openDocuments(result.filePaths);
+  if (!smoke) for (const file of opened.opened || []) app.addRecentDocument(file);
+  return opened;
 }
 
 function newDocument() {
@@ -75,7 +80,7 @@ module.exports = app.whenReady().then(async () => {
   });
   require('./image-paste.cjs').registerImagePaste(trusted);
   require('./link-icons.cjs').install(win, trusted);
-  const getSettings = await require('./settings.cjs')(win, trusted, language => { uiLanguage = language; buildMenu(); editSession?.refreshTitle(); });
+  getSettings = await require('./settings.cjs')(win, trusted, language => { uiLanguage = language; buildMenu(); editSession?.refreshTitle(); });
   uiLanguage = getSettings().language;
   ipcMain.handle('get-i18n', event => { trusted(event); return { language: uiLanguage, english }; });
   const { createSessionStore, restoreWorkspace } = require('./workspace-session.cjs');
@@ -139,8 +144,8 @@ module.exports = app.whenReady().then(async () => {
     { label: '查看', submenu: [
       { id: 'keyboard-shortcuts', label: '快捷键速查', accelerator: shortcutAccelerator('keyboard-shortcuts'), click: () => win.webContents.send('menu-action', 'shortcuts') },
       { type: 'separator' },
-      { label: '主题', submenu: ['system', 'light', 'dark', 'warm'].map((theme, index) => ({
-        id: `theme-${theme}`, label: ['跟随系统', '浅色', '深色', '暖纸'][index], type: 'radio',
+      { label: '主题', submenu: ['system', 'light', 'dark', 'warm', 'review'].map((theme, index) => ({
+        id: `theme-${theme}`, label: ['跟随系统', '浅色', '深色', '暖纸', '审阅纸'][index], type: 'radio',
         click: () => win.webContents.send('menu-action', 'theme', theme)
       })) },
       { id: 'font-up', label: '增大正文字号', click: () => win.webContents.send('menu-action', 'font', 1) },
@@ -169,7 +174,7 @@ module.exports = app.whenReady().then(async () => {
   function syncMenuState(state) {
     const menu = Menu.getApplicationMenu();
     win.webContents.setIgnoreMenuShortcuts(menuState.shortcutHelpOpen === true);
-    if (['system', 'light', 'dark', 'warm'].includes(state.theme)) menu.getMenuItemById(`theme-${state.theme}`).checked = true;
+    if (['system', 'light', 'dark', 'warm', 'review'].includes(state.theme)) menu.getMenuItemById(`theme-${state.theme}`).checked = true;
     if (Number.isInteger(state.fontSize)) {
       menu.getMenuItemById('font-up').enabled = state.fontSize < 24;
       menu.getMenuItemById('font-down').enabled = state.fontSize > 13;
