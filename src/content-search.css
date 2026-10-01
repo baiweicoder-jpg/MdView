@@ -2,7 +2,7 @@
 #document-search[hidden] { display: none; }
 .document-search-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; padding: 6px 12px; }
 .document-search-bar button, .document-search-bar select { height: 30px; padding: 3px 8px; font-size: 12px; }
-#document-search-query { flex: 1 1 180px; min-width: 100px; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); padding: 4px 9px; font: inherit; }
+#document-search-query { flex: 1 1 180px; min-width: 100px; height: 30px; resize: none; white-space: pre; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); padding: 4px 9px; font: inherit; }
 #document-search-case[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 #document-search-count { color: var(--muted); font-size: 12px; padding: 0 5px; }
 #document-search-results { max-height: min(220px, 27vh); overflow: auto; border-top: 1px solid var(--border); padding: 4px 12px; }

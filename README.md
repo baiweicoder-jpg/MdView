@@ -30,6 +30,19 @@ npm run release
 
 ## 使用
 
+### 标题自动序号 / Automatic heading numbers
+
+在「设置 → 偏好设置」切换「标题自动序号」（English: **Automatic heading numbers**）。默认关闭，在本机记忆开关；阅读正文、编辑正文和实时目录同步显示，插入、删除、调整级别或顺序后重新计算。仅使用 CSS 伪元素，不改变 Markdown、frontmatter、保存内容、标题锚点、搜索文字、编辑选区、撤销历史或未保存状态。
+
+- H1：`一、`、`二、`…`十、`、`十一、`；每个 H1 重置后续层级。
+- H2：`1. `、`2. `、`3. `，**不带 H1 编号**；H3：`3.1 `；H4：`3.1.1 `；H5 / H6 继续追加一层。
+- 每个父级重置更深层级；跳级时缺失的 H2–H5 祖先按 1 起算，不产生 0、不插入虚拟标题。例如文档直接从 H4 开始显示 `1.1.1`，随后 H3 显示 `1.2`。
+- 保留明确的手写序号，抑制该标题的自动前缀，但仍按一个标题计数，不以手写数值重新定位自动计数。例如 `一、资源网站`、`1. 标题`、`2、标题` 和 H3 的 `3.1 标题` 不重复编号。只识别中文数词加 `、`、1–3 位正整数加 `、` 或点/右括号及空格，以及与标题级别深度一致的点分数字。普通 `2026 年报`、`2026. 年报`、`3D 渲染` 不视作序号。
+- 手写识别是保守规则，不校正错误序号；H3 的 `1.5 倍速` 与 `1.5 标题` 无法仅靠文字区分，会保留原文。混用手写和自动编号可能不连续；关闭功能总是恢复原始显示。代码、列表数字不参与标题计数。
+
+Default off, persisted locally, and display-only in reader/editor/outline. Missing ancestor levels start at one; H1 is never included in decimal paths. Recognized manual prefixes remain verbatim and still count as headings, so mixed manual/automatic numbering is not corrected. Ambiguous decimal titles at the matching heading depth are preserved rather than rewritten. Generated numbers are not searchable or exported.
+
+
 - 文档信息紧凑显示为「本地文档 · 文件名 · 路径」，右侧显示「创建 / 更新」（English: Created / Updated），始终保持单行。按系统本地时区显示 `YYYY-MM-DD HH:mm`，悬停显示秒和时间含义，键盘 / 屏幕阅读器可读取完整说明；窄区域省略文字，极窄时隐藏可见日期但仍可悬停标题行查看。
 - 已保存文件：创建取文件系统 `birthtime`，更新取磁盘 `mtime`，**不包含未保存编辑**；成功保存 / 另存为 / 重新读取后刷新目标文件的实际时间。原子保存可能替换文件，创建时间遵循目标文件系统的报告，不伪装为原稿最初写作时间；不以 `ctime` 代替创建时间。
 - 未命名草稿：创建取新建时刻，更新仅随实际 Markdown 源码变化（包括改变源码的格式编辑、撤销 / 重做）刷新；聚焦、选择、主题 / 字号 / 搜索、重复无变化通知不会更新时间。时间随草稿恢复保存；旧版恢复记录缺少时间、时间无效或文件系统不提供创建时间时显示 `—`，不会补造历史时间。日期不插入 Markdown 正文或 frontmatter。

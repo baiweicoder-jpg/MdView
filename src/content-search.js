@@ -3,7 +3,7 @@
   const panel = document.createElement('section');
   panel.id = 'document-search'; panel.hidden = true;
   panel.setAttribute('aria-label', t('搜索文档内容'));
-  panel.innerHTML = '<div class="document-search-bar"><select id="document-search-scope" aria-label="搜索范围"><option value="current">当前文档</option><option value="all">所有打开的文档</option></select><input id="document-search-query" type="search" maxlength="256" autocomplete="off" spellcheck="false" aria-label="搜索文档内容"><button id="document-search-case" type="button" aria-pressed="false" title="区分大小写">Aa</button><output id="document-search-count" role="status" aria-live="polite"></output><button id="document-search-previous" type="button" title="上一个匹配（Shift+Enter）" aria-label="上一个匹配（Shift+Enter）">↑</button><button id="document-search-next" type="button" title="下一个匹配（Enter）" aria-label="下一个匹配（Enter）">↓</button><button id="document-search-close" type="button" title="关闭搜索（Escape）" aria-label="关闭搜索（Escape）">×</button></div><div id="document-search-results" role="list" aria-label="搜索结果"></div>';
+  panel.innerHTML = '<div class="document-search-bar"><select id="document-search-scope" aria-label="搜索范围"><option value="current">当前文档</option><option value="all">所有打开的文档</option></select><textarea id="document-search-query" rows="1" maxlength="256" autocomplete="off" spellcheck="false" aria-label="搜索文档内容"></textarea><button id="document-search-case" type="button" aria-pressed="false" title="区分大小写">Aa</button><output id="document-search-count" role="status" aria-live="polite"></output><button id="document-search-previous" type="button" title="上一个匹配（Shift+Enter）" aria-label="上一个匹配（Shift+Enter）">↑</button><button id="document-search-next" type="button" title="下一个匹配（Enter）" aria-label="下一个匹配（Enter）">↓</button><button id="document-search-close" type="button" title="关闭搜索（Escape）" aria-label="关闭搜索（Escape）">×</button></div><div id="document-search-results" role="list" aria-label="搜索结果"></div>';
   $('#tab-bar').after(panel);
   const input = $('#document-search-query'), scope = $('#document-search-scope');
   const count = $('#document-search-count'), list = $('#document-search-results');
@@ -16,7 +16,7 @@
     richEditor?.searchHighlights([], -1);
   }
   function updateCount() {
-    count.textContent = pending ? t('正在搜索…') : !input.value ? t('输入文字以搜索') :
+    count.textContent = input.value.length > input.maxLength ? t('搜索文字最多 {limit} 个字符', { limit: input.maxLength }) : pending ? t('正在搜索…') : !input.value ? t('输入文字以搜索') :
       total ? t('{index} / {total} 个匹配', { index: selected + 1, total: total.toLocaleString(uiLanguage) }) : t('没有匹配');
     if (!pending && total > hits.length) count.textContent += ' · ' + t('仅显示前 {limit} 个', { limit: MAX_HITS });
     $('#document-search-previous').disabled = $('#document-search-next').disabled = pending || !hits.length || fileBusy;
@@ -30,7 +30,7 @@
   function refresh() {
     if (panel.hidden) return;
     invalidate();
-    if (!input.value || !currentDocument) return;
+    if (!input.value || input.value.length > input.maxLength || !currentDocument) return;
     pending = true; updateCount();
     const token = generation;
     timer = setTimeout(() => search(token), 160);
@@ -165,9 +165,25 @@
       selected = hits.indexOf(hit); paint(true); updateCount();
     } finally { navigating = false; }
   }
+  function documentSelection() {
+    if (!currentDocument || fileBusy || restoringView) return '';
+    const root = editing ? richEditor?.editor.view.dom : $('#content');
+    const selection = window.getSelection(), focused = document.activeElement;
+    if (!root?.checkVisibility() || !selection?.rangeCount ||
+        !root.contains(selection.anchorNode) || !root.contains(selection.focusNode) ||
+        (focused?.closest('input,textarea,select,#document-search,dialog') && !root.contains(focused))) return '';
+    if (editing) {
+      const { from, to, empty } = richEditor.editor.state.selection;
+      return empty ? '' : richEditor.editor.state.doc.textBetween(from, to, '\n', node => node.type.name === 'hardBreak' ? '\n' : '\ufffc');
+    }
+    return selection.toString();
+  }
   function open(value = 'current') {
     if (document.querySelector('dialog[open]')) return;
+    // Both DOM shortcuts and the native menu IPC must capture before input.focus().
+    const selectedText = documentSelection();
     if (panel.hidden) restoreFocus = document.activeElement;
+    if (selectedText) input.value = selectedText;
     panel.hidden = false; scope.value = value === 'all' ? 'all' : 'current';
     input.focus(); input.select(); refresh();
   }

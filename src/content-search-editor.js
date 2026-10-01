@@ -25,7 +25,9 @@ export function installContentSearch(editor) {
     editor.state.doc.descendants((node, pos, parent) => {
       if (node.isTextblock) {
         // Blank standalone paragraphs disappear from Markdown; table cells do not.
-        if (node.type.name !== 'paragraph' || node.content.size || ['tableCell', 'tableHeader'].includes(parent.type.name)) blocks.push({ node, pos: pos + 1 });
+        let blank = node.type.name === 'paragraph' && /^[ \t\r\n]*$/.test(node.textContent);
+        node.forEach(child => { if (!child.isText) blank = false; });
+        if (!blank || ['tableCell', 'tableHeader'].includes(parent.type.name)) blocks.push({ node, pos: pos + 1 });
         return false;
       }
     });

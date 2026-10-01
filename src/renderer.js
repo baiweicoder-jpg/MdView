@@ -550,19 +550,87 @@ $('#toggle-editor-tools').addEventListener('click', () => {
 });
 applyToolsPanel();
 function changed() { window.mdview.draft(payload()); setEditingUI(); window.mdviewSearch?.refresh(); }
+// Reader and editor have different widths and DOM wrappers. Match semantic
+// blocks, including duplicate occurrences, rather than carrying raw scrollTop.
+function modeViewBlocks(root) {
+  const occurrences = new Map();
+  return [...root.querySelectorAll('h1,h2,h3,h4,h5,h6,p,pre,li,td,th')].filter(element => {
+    if (element.closest('.code-toolbar')) return false;
+    if (element.tagName === 'P' && element.closest('td,th')) return false;
+    if (element.tagName === 'LI' && element.querySelector('p')) return false;
+    return element.getBoundingClientRect().height > 0;
+  }).map(element => {
+    // A tight reader list has text directly in LI; the editor wraps it in P.
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll('ul,ol,.code-toolbar,.image-size-controls,.image-resize-handles,.ProseMirror-trailingBreak').forEach(node => node.remove());
+    const kind = /^(H[1-6]|PRE)$/.test(element.tagName) ? element.tagName : 'text';
+    const images = [...clone.querySelectorAll('img:not(.ProseMirror-separator)')].map(image => image.getAttribute('alt') || '').join('|');
+    const key = `${kind}:${clone.textContent.replace(/\s+/g, ' ').trim()}:${images}`;
+    const occurrence = occurrences.get(key) || 0;
+    occurrences.set(key, occurrence + 1);
+    return { element, key, occurrence };
+  });
+}
+function captureModeView() {
+  const top = reader.getBoundingClientRect().top;
+  const blocks = modeViewBlocks(editing ? $('#editor-content') : $('#content'));
+  const block = blocks.find(({ element }) => element.getBoundingClientRect().bottom > top + 24);
+  if (!block) return { scrollTop: reader.scrollTop };
+  const rect = block.element.getBoundingClientRect();
+  return { key: block.key, occurrence: block.occurrence, offset: rect.top - top,
+    fraction: Math.max(0, (top - rect.top) / rect.height), scrollTop: reader.scrollTop };
+}
+function restoreModeView(view) {
+  const block = modeViewBlocks(editing ? $('#editor-content') : $('#content'))
+    .find(block => block.key === view.key && block.occurrence === view.occurrence);
+  let top = view.scrollTop;
+  if (block) {
+    const rect = block.element.getBoundingClientRect();
+    const offset = view.offset < 0 ? -view.fraction * rect.height : view.offset;
+    top = reader.scrollTop + rect.top - reader.getBoundingClientRect().top - offset;
+  }
+  reader.scrollTo({ top, behavior: 'instant' });
+}
 async function toggleEditing() {
   if (!currentDocument || fileBusy) return;
   if (codeDialog.open) codeDialog.close();
+  const enteringNewEditor = !richEditor;
   if (!richEditor) createRichEditor();
+  let doc;
   if (editing) {
     const generation = viewGeneration, editor = richEditor, snapshot = payload();
-    const doc = await window.mdview.preview(snapshot);
+    doc = await window.mdview.preview(snapshot);
     // A tab switch/close or newer keystroke while IPC is in flight owns the view.
     if (generation !== viewGeneration || editor !== richEditor || !editing || snapshot.source !== richEditor.source()) return;
-    renderDocument({ ok: true, document: doc });
   }
-  editing = !editing; setEditingUI();
-  if (editing) richEditor.editor.commands.focus();
+  // Capture after preview IPC: scrolling while it was pending is intentional.
+  const view = captureModeView();
+  // Mode changes supersede only pending tab/preview restoration.
+  ++viewGeneration;
+  restoringView = true;
+  try {
+    if (doc) renderDocument({ ok: true, document: doc });
+    editing = !editing; setEditingUI();
+    restoreModeView(view);
+    if (editing) {
+      if (enteringNewEditor) {
+        // A newly mounted editor has only a synthetic start selection. Put its
+        // first caret in the visible content, without a scrolling transaction.
+        const bounds = reader.getBoundingClientRect();
+        const content = richEditor.editor.view.dom.getBoundingClientRect();
+        const position = richEditor.editor.view.posAtCoords({ left: content.left + 8,
+          top: bounds.top + Math.min(reader.clientHeight - 20, Math.max(32, view.offset || 0) + 8) });
+        if (position) richEditor.editor.commands.setTextSelection(position.pos);
+      }
+      // ProseMirror's view.focus uses preventScroll; Tiptap commands.focus
+      // schedules an unwanted scroll-to-selection on the next frame.
+      richEditor.editor.view.focus();
+    }
+  } finally {
+    restoringView = false;
+    rememberWorkspaceView();
+  }
+
 }
 async function saveDocument(asNew = false) {
   if (!currentDocument || fileBusy) return;
@@ -571,6 +639,14 @@ async function saveDocument(asNew = false) {
 }
 
 window.mdview.onToggleEdit(() => perform(toggleEditing));
+// The editor's Mod-E inline-code keymap otherwise consumes the application's
+// mode shortcut before Electron's menu accelerator gets a chance to run.
+$('#editor-content').addEventListener('keydown', event => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'e') return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (!event.repeat) perform(toggleEditing);
+}, { capture: true });
 window.mdview.onSaveRequest(asNew => perform(() => saveDocument(asNew)));
 window.mdview.onEditError(message => { $('#notice').textContent = message; $('#notice').hidden = false; });
 window.mdview.onBusy(value => {

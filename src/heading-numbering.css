@@ -1,0 +1,5 @@
+/* Dynamic pseudo-element rules are added to this CSP-approved sheet only.
+   Inherited heading/outline colors work in every theme; no document DOM writes. */
+#heading-numbering-settings .view-row { gap: 12px; }
+#heading-numbering-enabled { flex: 0 0 auto; }
+#heading-numbering-note { overflow-wrap: anywhere; }

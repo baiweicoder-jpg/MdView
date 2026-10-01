@@ -1,0 +1,85 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { app, Menu } = require('electron');
+const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || app.getPath('temp'), 'mdview-search-selection-'));
+app.setPath('userData', path.join(dir, 'profile'));
+app.disableHardwareAcceleration();
+app.on('browser-window-created', (_event, win) => { win.setOpacity(0); win.setSkipTaskbar(true); win.webContents.setBackgroundThrottling(false); });
+(async () => {
+  const { win } = await require('../src/main.cjs');
+  const run = code => win.webContents.executeJavaScript(code, true);
+  const wait = async code => { for (let i = 0; i < 240; i++) { if (await run(code)) return; await new Promise(r => setTimeout(r, 25)); } assert.fail(code); };
+  const key = (keyCode, modifiers = []) => { win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
+  await wait('!!currentDocument && !restoringView');
+  const initialId = await run('currentDocument.id');
+  await run('window.mdview.newDocument()');
+  await wait(`editing && !currentDocument.path && currentDocument.id !== ${initialId} && !fileBusy && !restoringView`);
+  await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  win.show(); win.focus();
+  if (!process.argv.includes('--selection-only')) {
+    // A whitespace-only live paragraph survives in the model but not serialized Markdown.
+    await run('richEditor.editor.commands.setContent("<p></p><p>草稿 needle</p><pre><code>代码 needle</code></pre>", {emitUpdate:false}); richEditor.editor.commands.insertContentAt(1, {type:"text", text:"   "})');
+    const before = await run('({source:payload().source,model:richEditor.editor.getJSON(),selection:richEditor.editor.state.selection.toJSON()})');
+    await run('window.mdviewSearch.open(); document.querySelector("#document-search-query").value="needle"; document.querySelector("#document-search-query").dispatchEvent(new Event("input"))');
+    await wait('!window.mdviewSearch.pending');
+    assert.equal(await run('window.mdviewSearch.total'), 2);
+    assert.deepEqual(await run('[...document.querySelectorAll(".document-search-match")].map(n=>n.textContent)'), ['needle', 'needle'], 'untitled unsent whitespace paragraph must not shift prose/code highlights');
+    assert.deepEqual(await run('({source:payload().source,model:richEditor.editor.getJSON(),selection:richEditor.editor.state.selection.toJSON()})'), before);
+  }
+  await run('window.mdviewSearch.close(); richEditor.editor.commands.setContent("<p>你好 <strong>世界</strong> prose</p>"); richEditor.editor.commands.setTextSelection({from:1,to:6}); richEditor.editor.view.focus()');
+  key('F', ['control']);
+  await wait('!document.querySelector("#document-search").hidden && !window.mdviewSearch.pending');
+  assert.equal(await run('document.querySelector("#document-search-query").value'), '你好 世界', 'native accelerator captures formatted document selection before focusing search');
+  assert.equal(await run('window.mdviewSearch.total'), 1);
+  await run('window.mdviewSearch.close(); richEditor.editor.commands.setContent("<pre><code>代码甲\\n代码乙</code></pre>"); richEditor.editor.commands.setTextSelection({from:1,to:8}); richEditor.editor.view.focus()');
+  key('F', ['control']);
+  await wait('!document.querySelector("#document-search").hidden && !window.mdviewSearch.pending');
+  assert.equal(await run('document.querySelector("#document-search-query").value'), '代码甲\n代码乙', 'multiline code selection is not silently stripped by a single-line search input');
+  assert.equal(await run('window.mdviewSearch.total'), 1);
+  assert.equal(await run('document.querySelector(".document-search-selected").textContent'), '代码甲\n代码乙');
+  assert.deepEqual(await run('(()=>{const q=document.querySelector("#document-search-query");return [q.selectionStart,q.selectionEnd]})()'), [0,7], 'query is selected for replacement');
+  await run('window.mdviewSearch.close(); richEditor.editor.commands.setContent("<p>"+"长".repeat(257)+"</p>"); richEditor.editor.commands.setTextSelection({from:1,to:258}); richEditor.editor.view.focus()');
+  key('F', ['control']);
+  await wait('!document.querySelector("#document-search").hidden && !window.mdviewSearch.pending');
+  assert.equal(await run('document.querySelector("#document-search-query").value.length'), 257, 'oversize selection is retained, never truncated');
+  assert.match(await run('document.querySelector("#document-search-count").textContent'), /256/, 'oversize selection explains the existing query limit');
+  // The real menu item uses the same preload event, even with no DOM keydown.
+  const find = Menu.getApplicationMenu().items.flatMap(item => item.submenu?.items || []).find(item => item.accelerator === 'CmdOrCtrl+F');
+  assert.ok(find);
+  await run('window.mdviewSearch.close(); richEditor.editor.commands.setContent("<p>普通 prose <strong>中文</strong> 😀</p>"); richEditor.editor.commands.setTextSelection({from:1,to:3}); richEditor.editor.view.focus()');
+  const preserved = await run('({source:payload().source, model:richEditor.editor.getJSON(), selection:richEditor.editor.state.selection.toJSON()})');
+  find.click();
+  await wait('document.querySelector("#document-search-query").value === "普通" && !window.mdviewSearch.pending');
+  assert.deepEqual(await run('({source:payload().source, model:richEditor.editor.getJSON(), selection:richEditor.editor.state.selection.toJSON()})'), preserved, 'menu search preserves serialized source/model/selection');
+  // Focused query input must not recapture the editor selection retained underneath.
+  await run('document.querySelector("#document-search-query").value="keep query"; document.querySelector("#document-search-query").select()');
+  find.click();
+  await wait('!window.mdviewSearch.pending');
+  assert.equal(await run('document.querySelector("#document-search-query").value'), 'keep query');
+  await run('window.mdviewSearch.close(); richEditor.editor.commands.setTextSelection(1); richEditor.editor.view.focus()');
+  find.click();
+  await wait('!window.mdviewSearch.pending');
+  assert.equal(await run('document.querySelector("#document-search-query").value'), 'keep query', 'empty document selection retains query');
+  await run('window.mdviewSearch.close(); toggleEditing()');
+  await wait('!editing');
+  await run('(()=>{const p=document.querySelector("#content p"),r=new Range();r.selectNodeContents(p);const s=getSelection();s.removeAllRanges();s.addRange(r)})()');
+  find.click();
+  await wait('!document.querySelector("#document-search").hidden && !window.mdviewSearch.pending');
+  assert.equal(await run('document.querySelector("#document-search-query").value'), '普通 prose 中文 😀', 'reader selection captures visible formatted text, not Markdown markers');
+  assert.equal(await run('window.mdviewSearch.total'), 1);
+  assert.equal(await run('[...CSS.highlights.get("document-search-selected")][0].toString()'), '普通 prose 中文 😀');
+  await run('window.mdviewSearch.close(); getSelection().removeAllRanges()');
+  find.click();
+  await wait('!window.mdviewSearch.pending');
+  assert.equal(await run('document.querySelector("#document-search-query").value'), '普通 prose 中文 😀', 'hidden editor model selection is ignored in reader mode');
+  // Close during a pending request never repaints; reopen intentionally reruns.
+  await run('document.querySelector("#document-search-query").value="普通"; document.querySelector("#document-search-query").dispatchEvent(new Event("input")); window.mdviewSearch.close()');
+  await new Promise(r => setTimeout(r, 250));
+  assert.equal(await run('CSS.highlights.has("document-search")'), false);
+  find.click();
+  await wait('!window.mdviewSearch.pending');
+  assert.equal(await run('window.mdviewSearch.total'), 1);
+  console.log('SEARCH DRAFT/SELECTION PASS: live whitespace draft, native formatted/code selections, multiline, 256 limit, menu IPC, no selection, query focus, reader Unicode, close/reopen, source/model/caret');
+  app.exit(0);
+})().catch(error => { console.error(error); app.exit(1); });
