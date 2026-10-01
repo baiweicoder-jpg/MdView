@@ -1,0 +1,56 @@
+/* Sky blue: visual-only theme shared by reading, editing and code dialogs. */
+:root[data-theme="sky"] {
+  color-scheme: light;
+  --bg: #f0f8ff; --surface: #ffffff; --sidebar: #e0effa; --text: #263e52;
+  --muted: #506b80; --border: #93b2c9; --accent: #126495; --accent-soft: #dceefa;
+  --heading: #174e73; --code: #fff0f6; --code-bar: #e0effa; --code-text: #a02c63;
+  --keyword: #245f9a; --string: #276952; --number: #8b5324; --comment: #526a7c;
+  --function: #126495; --deletion: #ab335c;
+  --sky-pink: #a02c63; --sky-grid: #6387a2;
+}
+:root[data-theme="sky"] #reader { padding-inline: clamp(20px, 3vw, 64px); }
+:root[data-theme="sky"] #reader > :is(.document-header, .markdown, #notice, .end-mark) {
+  width: 100%; max-width: none; min-width: 0;
+}
+:root[data-theme="sky"] .markdown { line-height: 1.85; }
+:root[data-theme="sky"] .markdown h1 {
+  padding-bottom: 18px; border-bottom: 2px solid var(--border); letter-spacing: -.02em;
+}
+:root[data-theme="sky"] .markdown h2 { border-bottom-color: var(--border); }
+:root[data-theme="sky"] .markdown strong { color: var(--sky-pink); }
+:root[data-theme="sky"] .markdown mark { color: #85224f; background: #fbd5e5; }
+:root[data-theme="sky"] .markdown :not(pre) > code {
+  border: 1px solid #d8a2bc; padding: .12em .38em;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
+:root[data-theme="sky"] .markdown blockquote {
+  background: var(--accent-soft); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+  border-radius: 0 8px 8px 0; padding: 4px 20px;
+}
+/* Explicit cell backgrounds make grid contrast predictable in both table DOMs. */
+:root[data-theme="sky"] .markdown :is(th, td) {
+  border: 1px solid var(--sky-grid); padding: 11px 18px;
+}
+:root[data-theme="sky"] .markdown th {
+  background: #dceefa; color: var(--heading); border-bottom-width: 2px;
+}
+:root[data-theme="sky"] .markdown td { background: #ffffff; }
+:root[data-theme="sky"] .markdown tr:nth-child(even) td { background: #edf6fd; }
+/* Plain code (including txt/text/plaintext fences) uses pink; language tokens
+   retain distinct syntax colors. No parsing, DOM decoration or source changes. */
+:root[data-theme="sky"] :is(.code-block, .markdown > pre) {
+  color-scheme: dark;
+  --code: #172e45; --code-bar: #203e58; --code-text: #ffb5d5;
+  --border: #64849e; --muted: #c5d9e9; --text: #e4eff8; --surface: #203e58;
+  --accent: #a9d9ff; --accent-soft: #325775;
+  --keyword: #a9d9ff; --string: #b6e3cc; --number: #f6d49e;
+  --comment: #a9bfd0; --function: #c6c6ff; --deletion: #ffb5c4;
+  border-radius: 10px;
+}
+:root[data-theme="sky"] .markdown pre { padding: 20px 24px; line-height: 1.8; scrollbar-color: #64849e var(--code); }
+:root[data-theme="sky"] .markdown pre code { color: var(--code-text); }
+:root[data-theme="sky"] .markdown ::selection { background: #bbdef6; color: #153d5b; }
+:root[data-theme="sky"] .code-block ::selection { background: #45698a; color: #ffffff; }
+@media (max-width: 850px) {
+  :root[data-theme="sky"] .markdown pre { padding: 16px; }
+}

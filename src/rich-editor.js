@@ -11,6 +11,7 @@ import { markdownEditingExtensions, serializeMarkdown } from './markdown-extensi
 import { installContentSearch } from './content-search-editor.js';
 import { installTableControls } from './table-controls.js';
 import { installImageGroupControls } from './image-group-controls.js';
+import { planCleanup, applyCleanup } from './text-cleanup.cjs';
 import { markdownPaste, prepareEditorHtml } from './markdown-paste.js';
 
 export function create(element, doc, onChange) {
@@ -466,6 +467,19 @@ export function create(element, doc, onChange) {
   return {
     editor,
     searchHighlights,
+    planCleanup: kind => planCleanup(editor.state, kind),
+    applyCleanup: plan => applyCleanup(editor, plan),
+    deleteSearchMatch(hit, query, caseSensitive) {
+      if (!editor.isEditable || !query || editor.isDestroyed) return false;
+      const range = searchHighlights([hit], 0, query, caseSensitive)[0];
+      if (!range) return false;
+      const actual = editor.state.doc.textBetween(range.from, range.to, '', node => node.type.name === 'hardBreak' ? '\n' : '\ufffc');
+      const pattern = new RegExp('^(?:' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')$', caseSensitive ? 'u' : 'iu');
+      if (!pattern.test(actual) || actual.includes('\ufffc')) return false;
+      editor.view.dispatch(closeHistory(editor.state.tr.delete(range.from, range.to)));
+      editor.view.dispatch(closeHistory(editor.state.tr));
+      return true;
+    },
     source: () => editor.getMarkdown() === baseline ? original : editor.getMarkdown(),
     saved(snapshot, raw) { baseline = snapshot === original ? baseline : snapshot; original = raw; },
     destroy: () => editor.destroy(),

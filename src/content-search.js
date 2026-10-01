@@ -3,7 +3,7 @@
   const panel = document.createElement('section');
   panel.id = 'document-search'; panel.hidden = true;
   panel.setAttribute('aria-label', t('搜索文档内容'));
-  panel.innerHTML = '<div class="document-search-bar"><select id="document-search-scope" aria-label="搜索范围"><option value="current">当前文档</option><option value="all">所有打开的文档</option></select><textarea id="document-search-query" rows="1" maxlength="256" autocomplete="off" spellcheck="false" aria-label="搜索文档内容"></textarea><button id="document-search-case" type="button" aria-pressed="false" title="区分大小写">Aa</button><output id="document-search-count" role="status" aria-live="polite"></output><button id="document-search-previous" type="button" title="上一个匹配（Shift+Enter）" aria-label="上一个匹配（Shift+Enter）">↑</button><button id="document-search-next" type="button" title="下一个匹配（Enter）" aria-label="下一个匹配（Enter）">↓</button><button id="document-search-close" type="button" title="关闭搜索（Escape）" aria-label="关闭搜索（Escape）">×</button></div><div id="document-search-results" role="list" aria-label="搜索结果"></div>';
+  panel.innerHTML = '<div class="document-search-bar"><select id="document-search-scope" aria-label="搜索范围"><option value="current">当前文档</option><option value="all">所有打开的文档</option></select><textarea id="document-search-query" rows="1" maxlength="256" autocomplete="off" spellcheck="false" aria-label="搜索文档内容"></textarea><button id="document-search-case" type="button" aria-pressed="false" title="区分大小写">Aa</button><output id="document-search-count" role="status" aria-live="polite"></output><button id="document-search-previous" type="button" title="上一个匹配（Shift+Enter）" aria-label="上一个匹配（Shift+Enter）">↑</button><button id="document-search-next" type="button" title="下一个匹配（Enter）" aria-label="下一个匹配（Enter）">↓</button><button id="document-search-delete" type="button" disabled>删除当前匹配</button><button id="document-search-close" type="button" title="关闭搜索（Escape）" aria-label="关闭搜索（Escape）">×</button></div><div id="document-search-results" role="list" aria-label="搜索结果"></div>';
   $('#tab-bar').after(panel);
   const input = $('#document-search-query'), scope = $('#document-search-scope');
   const count = $('#document-search-count'), list = $('#document-search-results');
@@ -20,6 +20,9 @@
       total ? t('{index} / {total} 个匹配', { index: selected + 1, total: total.toLocaleString(uiLanguage) }) : t('没有匹配');
     if (!pending && total > hits.length) count.textContent += ' · ' + t('仅显示前 {limit} 个', { limit: MAX_HITS });
     $('#document-search-previous').disabled = $('#document-search-next').disabled = pending || !hits.length || fileBusy;
+    const deleteButton = $('#document-search-delete');
+    deleteButton.disabled = pending || navigating || fileBusy || restoringView || !editing || !richEditor?.editor.isEditable || !input.value || !hits[selected] || hits[selected].id !== currentDocument?.id;
+    deleteButton.title = t(!editing ? '切换编辑后可用' : '只删除当前高亮匹配；其他文档请先点击搜索结果。可撤销，不自动保存。');
     list.hidden = scope.value !== 'all' || !hits.length;
   }
   function invalidate() {
@@ -163,7 +166,7 @@
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       if (token !== generation || panel.hidden || currentDocument?.id !== hit.id) return;
       selected = hits.indexOf(hit); paint(true); updateCount();
-    } finally { navigating = false; }
+    } finally { navigating = false; updateCount(); }
   }
   function documentSelection() {
     if (!currentDocument || fileBusy || restoringView) return '';
@@ -196,13 +199,20 @@
   caseButton.addEventListener('click', () => { caseSensitive = !caseSensitive; caseButton.setAttribute('aria-pressed', String(caseSensitive)); refresh(); });
   $('#document-search-previous').addEventListener('click', () => navigate(selected - 1));
   $('#document-search-next').addEventListener('click', () => navigate(selected + 1));
+  $('#document-search-delete').addEventListener('click', () => {
+    updateCount();
+    if ($('#document-search-delete').disabled || document.querySelector('dialog[open]')) return;
+    const hit = hits[selected];
+    richEditor.deleteSearchMatch(hit, input.value, caseSensitive);
+    refresh(); // A stale/unmappable result is never guessed from source offsets.
+  });
   $('#document-search-close').addEventListener('click', close);
   list.addEventListener('click', event => { const row = event.target.closest('.document-search-result'); if (row) void navigate(Number(row.dataset.index)); });
   document.addEventListener('keydown', event => {
     if (document.querySelector('dialog[open]')) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); open(event.shiftKey ? 'all' : 'current'); }
     else if (!panel.hidden && event.key === 'Escape') { event.preventDefault(); close(); }
-    else if (!panel.hidden && panel.contains(event.target) && event.key === 'Enter' && !event.isComposing) { event.preventDefault(); void navigate(selected + (event.shiftKey ? -1 : 1)); }
+    else if (!panel.hidden && panel.contains(event.target) && event.target.id !== 'document-search-delete' && event.key === 'Enter' && !event.isComposing) { event.preventDefault(); void navigate(selected + (event.shiftKey ? -1 : 1)); }
   });
   window.mdview.onMenuAction((action, value) => { if (action === 'find') open(value); });
   document.addEventListener('document-search-update', () => { if (!navigating) refresh(); });

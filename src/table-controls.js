@@ -65,6 +65,30 @@ export function installTableControls(editor) {
     editor.view.dispatch(editor.state.tr.setSelection(selection));
     editor.view.focus();
   }
+  function structuralAction(name) {
+    editor.view.dispatch(closeHistory(editor.state.tr));
+    editor.commands[name]();
+    editor.view.dispatch(closeHistory(editor.state.tr));
+    mode = null; anchor = null;
+  }
+  function deleteSelection(event) {
+    // Capture on this editor only, before Tiptap's cell-content deletion keymap.
+    // A text range (even across cells) is never a structural selection.
+    if (!['Backspace', 'Delete'].includes(event.key) || event.defaultPrevented
+      || event.isComposing || event.keyCode === 229 || editor.view.composing
+      || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey
+      || !editor.isEditable || event.target.closest?.('input,textarea,select,button,[contenteditable="false"]')) return;
+    const selection = editor.state.selection;
+    if (!(selection instanceof CellSelection)) return;
+    const rows = selection.isRowSelection(), columns = selection.isColSelection();
+    if (!rows && !columns) return; // Partial rectangles retain normal cell clearing.
+    // Selecting the entire table covers both axes, including its last row/column.
+    const name = rows && columns ? 'deleteTable' : rows ? 'deleteRow' : 'deleteColumn';
+    if (!editor.can()[name]()) return;
+    event.preventDefault(); event.stopPropagation();
+    structuralAction(name);
+    close(true);
+  }
   function mousedown(event) {
     if (!editor.isEditable) return;
     const $cell = cellAt(event.target);
@@ -96,12 +120,7 @@ export function installTableControls(editor) {
       button.addEventListener('click', () => {
         if (!editor.isEditable) { close(); return; }
         if (name === 'selectRows' || name === 'selectColumns') select(name === 'selectRows' ? 'row' : 'column', $cell);
-        else {
-          editor.view.dispatch(closeHistory(editor.state.tr));
-          editor.commands[name]();
-          editor.view.dispatch(closeHistory(editor.state.tr));
-          mode = null; anchor = null;
-        }
+        else structuralAction(name);
         close(true);
       });
       menu.append(button);
@@ -128,6 +147,7 @@ export function installTableControls(editor) {
     if (tr.docChanged) { close(); mode = null; anchor = null; }
   }
   const onViewport = () => close();
+  root.addEventListener('keydown', deleteSelection, true);
   root.addEventListener('mousedown', mousedown, true);
   root.addEventListener('contextmenu', context, true);
   doc.addEventListener('mousedown', outside, true);
@@ -136,7 +156,8 @@ export function installTableControls(editor) {
   win.addEventListener('scroll', onViewport, true);
   editor.on('transaction', transaction);
   const api = { destroy() {
-    close(); root.removeEventListener('mousedown', mousedown, true); root.removeEventListener('contextmenu', context, true);
+    close(); root.removeEventListener('keydown', deleteSelection, true);
+    root.removeEventListener('mousedown', mousedown, true); root.removeEventListener('contextmenu', context, true);
     doc.removeEventListener('mousedown', outside, true); doc.removeEventListener('keydown', key, true);
     win.removeEventListener('resize', onViewport); win.removeEventListener('scroll', onViewport, true);
     editor.off('transaction', transaction); editor.off('destroy', api.destroy);

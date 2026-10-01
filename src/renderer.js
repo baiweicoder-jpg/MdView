@@ -62,7 +62,7 @@ async function changeLanguage(language) {
 const reader = $('#reader');
 const codeDialog = $('#code-dialog');
 let codeDialogTrigger;
-const themeNames = { light: '浅色', dark: '深色', warm: '暖纸', review: '审阅纸' };
+const themeNames = { light: '浅色', dark: '深色', warm: '暖纸', review: '审阅纸', sky: '天蓝' };
 const media = matchMedia('(prefers-color-scheme: dark)');
 let preferences = {};
 try { preferences = JSON.parse(localStorage.getItem('mdview-preferences') || '{}') || {}; } catch {}

@@ -1,5 +1,14 @@
 // Chinese source strings are stable keys; only application chrome is translated.
 const english = {
+  '文本清理': 'Text cleanup', '删除换行': 'Remove line breaks', '删除空白行': 'Remove blank lines', '清理多余空格': 'Clean redundant spaces',
+  '删除当前匹配': 'Delete current match', '切换编辑后可用': 'Switch to editing to use this',
+  '只删除当前高亮匹配；其他文档请先点击搜索结果。可撤销，不自动保存。': 'Delete only the highlighted match. For another document, click its result first. Undoable; does not save.',
+  '优先处理选区，否则处理当前文档。执行前预览范围和修改数。': 'Use the selection, otherwise the current document. Preview scope and change count before applying.',
+  '确认清理': 'Apply cleanup', '范围：选中的文本': 'Scope: selected text', '范围：整个当前文档': 'Scope: entire current document',
+  '预计修改 {count} 处；可一次撤销，不自动保存。': '{count} planned changes; undo in one step. Does not save.',
+  '仅合并相邻的普通正文段落，英文之间保留分隔空格。保留显式硬换行；标题、列表、引用、表格、代码及含链接或图片的段落不合并。': 'Merge adjacent ordinary prose paragraphs only, preserving a space between English tokens. Explicit hard breaks, headings, lists, quotes, tables, code and paragraphs containing links or images are retained.',
+  '仅删除普通正文中的空段落或空白段落。保留 Markdown 必需的段落分隔，以及标题、列表、引用、表格和代码内部的空行。': 'Remove empty or whitespace-only ordinary prose paragraphs only. Required Markdown separators and blank lines inside headings, lists, quotes, tables and code are retained.',
+  '仅合并正文中重复的半角空格并清理段落边缘空格。保留单个空格、序号、英文、数字单位、缩进、硬换行、代码、链接及图片；无法可靠判断所有语义空格，不会删除全部空格。': 'Collapse repeated ASCII spaces and trim prose paragraph edges only. Keep single spaces, numbering, English words, numeric units, indentation, hard breaks, code, links and images. Meaning cannot always be inferred: this does not delete all spaces.',
   '复制文件全路径': 'Copy full file path', '打开所在文件夹': 'Show in folder', '重命名': 'Rename',
   '请先保存文档。': 'Save this document first.', '请先另存为内置欢迎文档。': 'Save a copy of the welcome document first.',
   '文档不存在。': 'This tab no longer exists.', '文档已切换，请重试。': 'The active document changed. Please retry.',
@@ -34,7 +43,7 @@ const english = {
   '放弃未保存的修改并重新加载界面？': 'Discard unsaved changes and reload the interface?',
   '文件': 'File', '新建空白文档': 'New document', '打开 Markdown…': 'Open Markdown…', '打开 Markdown': 'Open Markdown',
   '重新读取': 'Reload document', '保存': 'Save', '另存为': 'Save as', '下一个标签': 'Next tab', '上一个标签': 'Previous tab', '关闭标签': 'Close tab', '退出': 'Quit',
-  '编辑': 'Edit', '编辑模式': 'Edit mode', '查看': 'View', '主题': 'Theme', '跟随系统': 'System', '浅色': 'Light', '深色': 'Dark', '暖纸': 'Warm paper', '审阅纸': 'Review paper',
+  '编辑': 'Edit', '编辑模式': 'Edit mode', '查看': 'View', '主题': 'Theme', '跟随系统': 'System', '浅色': 'Light', '深色': 'Dark', '暖纸': 'Warm paper', '审阅纸': 'Review paper', '天蓝': 'Sky blue',
   '增大正文字号': 'Increase reading font', '减小正文字号': 'Decrease reading font', '重置正文字号': 'Reset reading font', '切换目录': 'Toggle outline',
   '全屏': 'Full screen', '放大界面': 'Zoom in', '缩小界面': 'Zoom out', '重置缩放': 'Reset zoom', '设置': 'Settings', '偏好设置…': 'Preferences…', '界面语言': 'UI language',
   '打开的文档': 'Open documents', '文档目录': 'Outline', '本地阅读 · 文件不上传': 'Read locally · No uploads', '拖入 Markdown 即可打开': 'Drop Markdown to open',

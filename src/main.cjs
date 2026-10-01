@@ -144,8 +144,8 @@ module.exports = app.whenReady().then(async () => {
     { label: '查看', submenu: [
       { id: 'keyboard-shortcuts', label: '快捷键速查', accelerator: shortcutAccelerator('keyboard-shortcuts'), click: () => win.webContents.send('menu-action', 'shortcuts') },
       { type: 'separator' },
-      { label: '主题', submenu: ['system', 'light', 'dark', 'warm', 'review'].map((theme, index) => ({
-        id: `theme-${theme}`, label: ['跟随系统', '浅色', '深色', '暖纸', '审阅纸'][index], type: 'radio',
+      { label: '主题', submenu: ['system', 'light', 'dark', 'warm', 'review', 'sky'].map((theme, index) => ({
+        id: `theme-${theme}`, label: ['跟随系统', '浅色', '深色', '暖纸', '审阅纸', '天蓝'][index], type: 'radio',
         click: () => win.webContents.send('menu-action', 'theme', theme)
       })) },
       { id: 'font-up', label: '增大正文字号', click: () => win.webContents.send('menu-action', 'font', 1) },
@@ -174,7 +174,7 @@ module.exports = app.whenReady().then(async () => {
   function syncMenuState(state) {
     const menu = Menu.getApplicationMenu();
     win.webContents.setIgnoreMenuShortcuts(menuState.shortcutHelpOpen === true);
-    if (['system', 'light', 'dark', 'warm', 'review'].includes(state.theme)) menu.getMenuItemById(`theme-${state.theme}`).checked = true;
+    if (['system', 'light', 'dark', 'warm', 'review', 'sky'].includes(state.theme)) menu.getMenuItemById(`theme-${state.theme}`).checked = true;
     if (Number.isInteger(state.fontSize)) {
       menu.getMenuItemById('font-up').enabled = state.fontSize < 24;
       menu.getMenuItemById('font-down').enabled = state.fontSize > 13;
