@@ -2,6 +2,7 @@
 // No filesystem, IPC or network access. Each consumer owns its mutable parser.
 const MarkdownIt = require('markdown-it');
 const hljs = require('highlight.js/lib/common');
+const { installWidthSyntax } = require('./table-width-syntax.cjs');
 
 function createMarkdownParser() {
 const md = new MarkdownIt({
@@ -137,6 +138,7 @@ for (const type of ['fence', 'code_block']) {
   };
 }
 
+installWidthSyntax(md);
 return md;
 }
 

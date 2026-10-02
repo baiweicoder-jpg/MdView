@@ -6,6 +6,30 @@ const { app, Menu } = require('electron');
 module.exports = async ({ win, openDocument }) => {
   const run = code => win.webContents.executeJavaScript(code, true);
   const settle = () => run('new Promise(r=>setTimeout(()=>requestAnimationFrame(()=>requestAnimationFrame(r)),100))');
+  const wait = async condition => {
+    for (let i = 0; i < 200; i++) {
+      if (await run(condition)) return;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    assert.fail(`Theme interaction did not become ready: ${condition}`);
+  };
+  const click = async selector => {
+    const point = await run(`(() => { const element=document.querySelector(${JSON.stringify(selector)}); if (!element.checkVisibility()) throw Error('Click target is not visible: ' + ${JSON.stringify(selector)}); const r=element.getBoundingClientRect(); return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}; })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', ...point });
+    win.webContents.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...point });
+    win.webContents.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, ...point });
+  };
+  const openThemeList = async () => {
+    // The adapter deliberately dismisses on native blur/outside scroll. A
+    // synthetic option click on a dismissed popover is silently ignored.
+    // Establish focus and finish scrolling BEFORE opening; never retry a click.
+    win.focus();
+    await wait('document.hasFocus() && document.querySelector("#settings-dialog").open');
+    await run('document.querySelector("#theme-trigger").scrollIntoView({block:"nearest",behavior:"instant"})');
+    await settle();
+    await click('#theme-trigger');
+    await wait('document.hasFocus() && document.querySelector("#theme-listbox").matches(":popover-open") && document.activeElement.id === "theme-trigger"');
+  };
   const file = path.join(app.getPath('userData'), 'review-theme.md');
   const source = '# 审阅纸主题\n\n正文与 `inline_code`。\n\n## 证据与建议\n\n> 保留协议资产，逐步修复。\n\n- [ ] 待验证\n- 普通项目\n\n| 指标 | 结果 |\n| --- | --- |\n| 验证 | 通过 |\n\n```js\nconst message = "hello"; // comment\n' + 'console.log(message);'.repeat(30) + '\n```\n\n```bash\nPYTHONDONTWRITEBYTECODE=1 python -m unittest\n```\n';
   fs.writeFileSync(file, source);
@@ -78,12 +102,14 @@ module.exports = async ({ win, openDocument }) => {
   assert.equal(await run('document.querySelector("#theme-status").textContent'), 'Review paper');
   assert.equal(menu().getMenuItemById('theme-review').label, 'Review paper');
   await run('openSettings()'); await settle();
-  await run('document.querySelector("#theme-trigger").click()'); await settle();
+  await openThemeList();
   assert.equal(await run('document.querySelector("#theme-listbox [data-value=review]").textContent.trim().includes("Review paper")'), true);
-  await run('document.querySelector("#theme-listbox [data-value=light]").click()'); await settle();
+  await click('#theme-listbox [data-value=light]');
+  await wait('document.documentElement.dataset.theme === "light"');
   assert.equal(await run('document.documentElement.dataset.theme'), 'light');
-  await run('document.querySelector("#theme-trigger").click()'); await settle();
-  await run('document.querySelector("#theme-listbox [data-value=review]").click()'); await settle();
+  await openThemeList();
+  await click('#theme-listbox [data-value=review]');
+  await wait('document.documentElement.dataset.theme === "review"');
   assert.equal(await run('document.documentElement.dataset.theme'), 'review');
   await run('document.querySelector("#settings-dialog").close(); changeLanguage("zh-CN")'); await settle();
   assert.equal(await run('document.querySelector("#theme-status").textContent'), '审阅纸');

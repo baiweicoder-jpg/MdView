@@ -52,7 +52,7 @@
   add('ordered-list', 'blocks', '有序列表', 'Numbered list', ['Ctrl+Shift+7'], editor);
   add('task-list', 'blocks', '任务列表', 'Task list', ['Ctrl+Shift+9'], editor);
   add('code-block', 'blocks', '代码块', 'Code block', ['Ctrl+Alt+C'], editor);
-  add('hard-break', 'blocks', '软换行', 'Hard line break', ['Shift+Enter', 'Ctrl+Enter'], ['编辑器；非代码块', 'Editor; outside code']);
+  add('hard-break', 'blocks', '硬换行', 'Hard line break', ['Shift+Enter', 'Ctrl+Enter'], ['编辑器；非代码块；表格末行 Shift+Enter / 首行 Ctrl+Enter 优先退出表格', 'Editor; outside code; last-row Shift+Enter / first-row Ctrl+Enter exit the table instead']);
   add('exit-code', 'blocks', '退出代码块', 'Exit code block', ['Ctrl+Enter'], ['仅编辑中的代码块', 'Editable code only']);
   add('code-indent', 'blocks', '插入两个空格 / 多行缩进', 'Insert two spaces / indent lines', ['Tab'], ['仅编辑中的代码块', 'Editable code only']);
   add('code-outdent', 'blocks', '减少行首缩进', 'Outdent lines', ['Shift+Tab'], ['仅编辑中的代码块', 'Editable code only']);
@@ -60,6 +60,9 @@
   add('list-split', 'blocks', '新列表项；空项退出列表', 'New list item; exit empty item', ['Enter'], ['编辑器列表内', 'In an editor list']);
   add('table-next', 'blocks', '下一单元格；末格新增行', 'Next cell; add row at last cell', ['Tab'], ['编辑器表格内', 'In an editor table']);
   add('table-previous', 'blocks', '上一单元格', 'Previous cell', ['Shift+Tab'], ['编辑器表格内', 'In an editor table']);
+  add('table-append', 'blocks', '追加行并移到对应列', 'Append row and move to same column', ['Enter'], ['编辑表格末行；普通段落中的空选区光标，非输入法组词', 'Last table row; caret in a paragraph, not a range or IME composition']);
+  add('table-exit-below', 'blocks', '移到表格下方空段落', 'Move to empty paragraph below table', ['Shift+Enter'], ['编辑表格末行；普通段落中的空选区光标', 'Last table row; caret in a paragraph, no range selection']);
+  add('table-exit-above', 'blocks', '移到表格上方空段落', 'Move to empty paragraph above table', ['Ctrl+Enter'], ['编辑表格首行（含表头）；普通段落中的空选区光标', 'First table row (including header); caret in a paragraph, no range selection']);
   add('table-delete', 'blocks', '删除整张表格', 'Delete entire table', ['Backspace', 'Delete', 'Ctrl+Backspace', 'Ctrl+Delete'], ['编辑器；已选中全部单元格', 'Editor; all cells selected']);
   add('image-context', 'controls', '打开图片批量尺寸菜单', 'Open image group size menu', ['Shift+F10', 'ContextMenu'], ['编辑器聚焦且已多选图片', 'Editor focused with image group selected']);
   add('image-clear', 'controls', '关闭图片菜单 / 清除图片多选', 'Close image menu / clear image group', ['Escape'], ['编辑器图片多选时', 'Editor image group active']);

@@ -40,7 +40,34 @@
   const list = element('div', 'opened-files-list');
   const empty = element('p', 'opened-files-empty');
   empty.setAttribute('role', 'status');
-  filesPanel.append(search, list, empty);
+  const selection = window.MdViewFileSelection();
+  const tools = element('div', 'opened-files-actions');
+  const count = element('span', 'opened-files-count'); count.setAttribute('role', 'status');
+  const hint = element('p', 'opened-files-selection-hint');
+  const buttons = {};
+  for (const action of ['all', 'clear', 'close', 'trash']) {
+    const button = element('button', `opened-files-${action}`); button.type = 'button';
+    buttons[action] = button; tools.append(button);
+  }
+  const text = (zh, en) => uiLanguage === 'en' ? en : zh;
+  let visibleIds = [], pending = false;
+  buttons.all.addEventListener('click', () => { selection.all(visibleIds); renderFiles(); });
+  buttons.clear.addEventListener('click', () => { selection.clear(); renderFiles(); });
+  for (const action of ['close', 'trash']) buttons[action].addEventListener('click', async () => {
+    if (fileBusy || pending || !selection.ids().length) return;
+    pending = true; renderFiles();
+    try {
+      rememberWorkspaceView();
+      const result = await window.mdview.batchTabs({ action, ids: selection.ids() });
+      for (const id of result.completed || []) if (selection.has(id)) selection.toggle(id, visibleIds);
+      if (!result.ok && !result.canceled) {
+        $('#notice').textContent = result.message || (result.failures || []).map(item => item.message).join('\n'); $('#notice').hidden = false;
+      }
+    } catch (error) { $('#notice').textContent = error.message; $('#notice').hidden = false; }
+    finally { pending = false; renderFiles(); }
+  });
+  window.mdview.onBusy(() => renderFiles());
+  filesPanel.append(search, count, tools, hint, list, empty);
   sidebar.prepend(tablist, outlinePanel, filesPanel);
   let mode = 'outline';
   function select(next) {
@@ -52,12 +79,27 @@
     }
   }
   function renderFiles() {
-    const focused = document.activeElement?.closest('.sidebar-file')?.dataset.id;
+    const focused = document.activeElement?.closest('.sidebar-file-entry')?.dataset.id;
+    const checkboxFocused = document.activeElement?.classList.contains('sidebar-file-select');
     const query = search.value.trim().toLocaleLowerCase();
+    const visible = tabs.filter(tab => !query || `${tab.path ? tab.name : t('未命名.md')}\n${tab.path || ''}`.toLocaleLowerCase().includes(query));
+    visibleIds = visible.map(tab => tab.id);
+    selection.scope(visibleIds);
+    const selected = tabs.filter(tab => selection.has(tab.id));
+    count.textContent = text(`已选 ${selected.length} / ${visible.length}`, `${selected.length} selected / ${visible.length} shown`);
+    const disabled = fileBusy || pending;
+    buttons.all.textContent = text('全选筛选结果', 'Select all shown'); buttons.all.disabled = disabled || !visible.length;
+    buttons.clear.textContent = text('清除选择', 'Clear'); buttons.clear.disabled = disabled || !selected.length;
+    buttons.close.textContent = text('关闭标签', 'Close tabs'); buttons.close.disabled = disabled || !selected.length;
+    buttons.trash.textContent = text('删除文件…', 'Delete files…'); buttons.trash.disabled = disabled || !selected.length || selected.some(tab => !tab.path);
+    hint.textContent = selected.some(tab => !tab.path) ? text('未命名文档不能删除磁盘文件，请关闭标签。', 'Untitled documents have no disk file. Use Close tabs.') : text('勾选或 Ctrl 多选，Shift 连选；删除会移入回收站。', 'Checkbox/Ctrl to select; Shift for range. Delete moves files to Recycle Bin.');
+    buttons.trash.title = hint.textContent;
     const fragment = document.createDocumentFragment();
-    for (const tab of tabs) {
+    for (const tab of visible) {
       const name = tab.path ? tab.name : t('未命名.md');
-      if (query && !`${name}\n${tab.path || ''}`.toLocaleLowerCase().includes(query)) continue;
+      const entry = element('div', null, 'sidebar-file-entry' + (selection.has(tab.id) ? ' selected' : '')); entry.dataset.id = String(tab.id);
+      const checkbox = element('input', null, 'sidebar-file-select'); checkbox.type = 'checkbox'; checkbox.checked = selection.has(tab.id); checkbox.disabled = disabled;
+      checkbox.setAttribute('aria-label', text(`选择 ${name}`, `Select ${name}`));
       const row = element('button', null, 'sidebar-file' + (tab.active ? ' active' : '') + (tab.dirty ? ' dirty' : ''));
       row.type = 'button';
       row.dataset.id = String(tab.id);
@@ -71,19 +113,24 @@
       dirty.textContent = tab.dirty ? '●' : '';
       dirty.setAttribute('aria-label', tab.dirty ? t('未保存的更改') : '');
       row.append(label, dirty);
-      fragment.append(row);
+      entry.append(checkbox, row);
+      fragment.append(entry);
     }
     list.replaceChildren(fragment);
     empty.hidden = list.children.length > 0;
     empty.textContent = t(query ? '没有匹配的已打开文件' : '没有已打开的文件');
-    if (focused) [...list.children].find(row => row.dataset.id === focused)?.focus({ preventScroll: true });
+    if (focused) [...list.children].find(row => row.dataset.id === focused)?.querySelector(checkboxFocused ? 'input' : 'button')?.focus({ preventScroll: true });
   }
   search.addEventListener('input', renderFiles);
   list.addEventListener('click', event => {
-    const row = event.target.closest('.sidebar-file');
-    if (!row) return;
-    const tab = tabs.find(item => String(item.id) === row.dataset.id);
-    if (tab && !tab.active) perform(() => switchToTab(tab.id));
+    const entry = event.target.closest('.sidebar-file-entry');
+    if (!entry || fileBusy || pending) return;
+    const tab = tabs.find(item => String(item.id) === entry.dataset.id);
+    if (!tab) return;
+    if (event.target.matches('input') || event.ctrlKey || event.metaKey || event.shiftKey) {
+      selection.toggle(tab.id, visibleIds, event.shiftKey); renderFiles(); return;
+    }
+    if (!tab.active) perform(() => switchToTab(tab.id));
   });
   const resizer = element('div', 'sidebar-resizer');
   resizer.tabIndex = 0;

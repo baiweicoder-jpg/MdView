@@ -13,6 +13,9 @@ app.on('browser-window-created', (_event, win) => {
 process.on('uncaughtException', error => { console.error(error); app.exit(1); });
 (async () => {
   const { win, editSession } = await require('../src/main.cjs');
+  // Reapply after the renderer exists: a zero-opacity native window can enter
+  // hidden visibility during startup and otherwise suspend restoration's RAFs.
+  win.webContents.setBackgroundThrottling(false);
   require('./unsaved-driver.cjs')(win);
   const run = code => win.webContents.executeJavaScript(code, true);
   const wait = async check => {

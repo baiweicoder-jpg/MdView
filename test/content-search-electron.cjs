@@ -8,6 +8,8 @@ app.disableHardwareAcceleration();
 app.on('browser-window-created', (_e, win) => { win.setOpacity(0); win.setSkipTaskbar(true); win.webContents.setBackgroundThrottling(false); });
 (async () => {
  const {win, editSession} = await require('../src/main.cjs');
+ // Disable throttling on the loaded renderer as well as the native window.
+ win.webContents.setBackgroundThrottling(false);
  const run = async code => { try { return await win.webContents.executeJavaScript(code, true); } catch (e) { console.error('Renderer expression:',code); throw e; } };
  // Tiptap's existing style injection is CSP-blocked on editor creation. Measure
  // violations introduced by search separately after initialization settles.

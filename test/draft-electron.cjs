@@ -13,6 +13,8 @@ app.on('browser-window-created', (_event, win) => {
 const sources = ['# 中文 🐋\n\n**粗体** 和 *斜体*\n\n- [x] 完成\n', '## 日本語 café\n\n```js\nconst x = "🐋";\n```\n\n最后一笔'];
 (async () => {
   const {win,editSession,sessionStore} = await require('../src/main.cjs');
+  // Disable throttling on the loaded renderer as well as the native window.
+  win.webContents.setBackgroundThrottling(false);
   require('./unsaved-driver.cjs')(win);
   win.showInactive();
   const run = code => win.webContents.executeJavaScript(code,true);

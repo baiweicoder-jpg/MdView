@@ -18,6 +18,7 @@
   <script src="generated/rich-editor.js" defer></script>
   <script src="icons.js" defer></script>
   <link rel="stylesheet" href="content-search.css">
+  <script src="external-links.js" defer></script>
   <script src="renderer.js" defer></script>
   <script src="text-cleanup.js" defer></script>
   <link rel="stylesheet" href="text-cleanup.css">
@@ -31,6 +32,8 @@
   <script src="styled-select.js" defer></script>
   <script src="menu-bar.js" defer></script>
   <script src="color-controls.js" defer></script>
+  <script src="tab-visibility.js" defer></script>
+  <script src="file-selection.js" defer></script>
   <script src="sidebar.js" defer></script>
   <link rel="stylesheet" href="zoom-controls.css">
   <script src="zoom-controls.js" defer></script>
@@ -38,6 +41,9 @@
   <link rel="stylesheet" href="heading-numbering.css">
   <script src="heading-numbering-core.js" defer></script>
   <script src="heading-numbering.js" defer></script>
+  <script src="plaintext-copy-core.js" defer></script>
+  <script src="plaintext-copy.js" defer></script>
+  <link rel="stylesheet" href="plaintext-copy.css">
   <link rel="stylesheet" href="review-theme.css">
   <link rel="stylesheet" href="sky-theme.css">
 </head>
@@ -72,7 +78,8 @@
         </section>
         <section class="inspector-section">
           <h2>表格</h2>
-          <div class="format-grid"><button data-edit="table" title="插入三行三列表格"><span data-icon="table"></span><span>插入表格</span></button><button data-edit="addRowAfter" title="在当前行后添加一行"><span data-icon="row-plus"></span><span>添加行</span></button><button data-edit="deleteTable" class="danger-action" title="删除当前表格"><span data-icon="trash"></span><span>删除表格</span></button></div>
+          <label class="table-row-count-label" for="insert-table-rows"><span>表格行数（含表头）</span><input id="insert-table-rows" type="number" min="1" max="100" step="1" value="3" title="请输入 1–100 的整数"></label>
+          <div class="format-grid"><button data-edit="table" title="按指定行数插入三列表格"><span data-icon="table"></span><span>插入表格</span></button><button data-edit="addRowAfter" title="在当前行后添加一行"><span data-icon="row-plus"></span><span>添加行</span></button><button data-edit="deleteTable" class="danger-action" title="删除当前表格"><span data-icon="trash"></span><span>删除表格</span></button></div>
         </section>
         <section class="inspector-section">
           <h2>编辑历史</h2>

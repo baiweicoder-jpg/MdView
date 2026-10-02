@@ -51,7 +51,7 @@
     // Prevent document shortcuts underneath this modal; Tab stays in the dialog.
     event.stopPropagation();
     if (event.key !== 'Tab') return;
-    const buttons = [...dialog.querySelectorAll('button')];
+    const buttons = [...dialog.querySelectorAll('button')].filter(button => !button.hidden);
     const index = buttons.indexOf(document.activeElement);
     event.preventDefault();
     buttons[(index + (event.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
@@ -60,13 +60,16 @@
     if (!question || typeof question.id !== 'string' || typeof question.name !== 'string') return;
     if (current) { api.answerUnsavedConfirm(question.id, 'cancel'); return; }
     const english = question.language === 'en';
-    dialog.querySelector('#unsaved-title').textContent = english ? 'Save changes?' : '保存修改？';
+    const trash = question.kind === 'trash';
+    dialog.dataset.kind = trash ? 'trash' : 'save';
+    dialog.querySelector('[data-choice="save"]').hidden = trash;
+    dialog.querySelector('#unsaved-title').textContent = trash ? (english ? `Delete ${question.files.length} file(s)?` : `删除 ${question.files.length} 个文件？`) : (english ? 'Save changes?' : '保存修改？');
     const name = dialog.querySelector('#unsaved-name');
-    name.textContent = question.name;
-    name.title = question.name;
-    dialog.querySelector('#unsaved-description').textContent = english ? 'This document has unsaved changes. If you don’t save, these changes will be lost.' : '此文档有未保存的修改。如果不保存，这些修改将会丢失。';
+    name.textContent = trash ? question.files.map(file => `${file.dirty ? '● ' : ''}${file.path}`).join('\n') : question.name;
+    name.title = name.textContent;
+    dialog.querySelector('#unsaved-description').textContent = trash ? (english ? 'Move these disk files to the Recycle Bin and close their tabs. Unsaved edits (●) will be discarded, not saved. This is not just closing tabs.' : '将这些磁盘文件移入回收站并关闭标签。未保存的修改（●）将被丢弃，不会自动保存。这不只是关闭标签。') : (english ? 'This document has unsaved changes. If you don’t save, these changes will be lost.' : '此文档有未保存的修改。如果不保存，这些修改将会丢失。');
     for (const button of dialog.querySelectorAll('[data-choice]')) {
-      const label = ({ save: english ? 'Save' : '保存', discard: english ? 'Don’t save' : '不保存', cancel: english ? 'Cancel' : '取消' })[button.dataset.choice];
+      const label = ({ save: english ? 'Save' : '保存', discard: trash ? (english ? 'Move to Recycle Bin' : '移入回收站') : (english ? 'Don’t save' : '不保存'), cancel: english ? 'Cancel' : '取消' })[button.dataset.choice];
       if (button.classList.contains('unsaved-x')) button.setAttribute('aria-label', label);
       else button.textContent = label;
     }

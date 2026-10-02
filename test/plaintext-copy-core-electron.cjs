@@ -1,0 +1,17 @@
+const {app,BrowserWindow}=require('electron');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');const path=require('node:path');
+const dir=fs.mkdtempSync(path.join(process.env.TMPDIR||app.getPath('temp'),'mdview-plain-core-'));app.setPath('userData',path.join(dir,'profile'));app.disableHardwareAcceleration();
+(async()=>{await app.whenReady();const w=new BrowserWindow({show:false,webPreferences:{sandbox:true}});await w.loadURL('data:text/html,<html><body><input id="heading-numbering-enabled" type="checkbox" checked><article id="content"></article></body></html>');
+const run=code=>w.webContents.executeJavaScript(code,true);
+await run(fs.readFileSync(path.join(__dirname,'../src/heading-numbering-core.js'),'utf8'));await run(fs.readFileSync(path.join(__dirname,'../src/plaintext-copy-core.js'),'utf8'));
+await run(`document.querySelector('#content').innerHTML='<h1>标题</h1><h2>1. manual</h2><ol start="5"><li>first</li><li>second<ol start="0"><li>nested zero</li><li>nested one</li></ol></li><li>last</li></ol><p>2026  words 42 <a href="https://example.com">link</a></p><pre><code>  1. code\\n   \\n  2026  token</code></pre><table><tr><td>A</td><td>B</td></tr><tr><td>中</td><td>42</td></tr></table>';`);
+const all=await run(`(()=>{const root=document.querySelector('#content'),r=document.createRange();r.selectNodeContents(root);return [MdViewPlaintextCopy.selectionText(root,r,true),MdViewPlaintextCopy.selectionText(root,r,false)];})()`);
+assert.equal(all[0],'一、标题\n1. manual\n5. first\n6. second\n  0. nested zero\n  1. nested one\n7. last\n2026  words 42 link\n  1. code\n  2026  token\nA\tB\n中\t42');
+assert.equal(all[1],'标题\n1. manual\nfirst\nsecond\n  nested zero\n  nested one\nlast\n2026  words 42 link\n  1. code\n  2026  token\nA\tB\n中\t42');
+const nested=await run(`(()=>{const root=document.querySelector('#content'),r=document.createRange();r.selectNodeContents(root.querySelector('ol ol li'));return MdViewPlaintextCopy.selectionText(root,r,true);})()`);
+assert.equal(nested,'  0. nested zero','selected nested item must not inherit a phantom parent prefix');
+await run(`document.querySelector('#content').innerHTML='<p>left  2026 <code>1. token</code> right</p><p style="display:none">hidden text</p><span data-search-image>missing image fallback</span><img alt="image"><p>   </p><p>  last  </p>'`);
+assert.equal(await run(`(()=>{const root=document.querySelector('#content'),r=document.createRange();r.selectNodeContents(root);return MdViewPlaintextCopy.selectionText(root,r,false);})()`),'left  2026 1. token right\n  last  ','only visible meaningful text, preserving spaces and inline code');
+console.log('plaintext core PASS');w.destroy();app.exit(0);
+})().catch(e=>{console.error(e);app.exit(1)});

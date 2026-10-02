@@ -12,6 +12,8 @@ app.on('browser-window-created', (_event, win) => {
 });
 (async () => {
   const { win, editSession } = await require('../src/main.cjs');
+  // Disable throttling on the loaded renderer as well as the native window.
+  win.webContents.setBackgroundThrottling(false);
   const run = async code => { try { return await win.webContents.executeJavaScript(code, true); } catch(error) { console.error('Failed renderer probe:',code); throw error; } };
   const wait = async code => {
     for (let i=0;i<150;i++) { if (await run(code)) return; await new Promise(r=>setTimeout(r,20)); }

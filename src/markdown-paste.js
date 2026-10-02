@@ -28,7 +28,7 @@ export function prepareEditorHtml(html) {
   }
   for (const cell of content.querySelectorAll('th,td')) {
     const align = [...cell.classList].find(name => name.startsWith('align-'));
-    if (align) cell.style.textAlign = align.slice(6);
+    if (align && ['left', 'center', 'right'].includes(align.slice(6))) cell.setAttribute('align', align.slice(6));
   }
   return content;
 }

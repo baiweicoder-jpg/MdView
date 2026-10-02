@@ -14,6 +14,8 @@ app.on('browser-window-created', (_event, win) => {
 });
 (async () => {
   const { win, editSession, openDocument } = await require('../src/main.cjs');
+  // Apply to the loaded renderer, not only the not-yet-loaded native window.
+  win.webContents.setBackgroundThrottling(false);
   require('./unsaved-driver.cjs')(win);
   const run = code => win.webContents.executeJavaScript(code, true);
   const wait = async code => { for (let i = 0; i < 160; i++) { if (await run(code)) return; await new Promise(r => setTimeout(r, 25)); } assert.fail(code); };

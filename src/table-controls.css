@@ -1,3 +1,17 @@
+.table-row-count-label { display: flex; align-items: center; gap: 8px; padding: 4px 8px; }
+.table-row-count-label input { min-width: 0; width: 64px; padding: 4px; color: inherit; background: var(--surface, Canvas); border: 1px solid var(--border, GrayText); border-radius: 4px; }
+.mdview-table-scroll { max-width: 100%; overflow-x: auto; margin: 23px 0; }
+.markdown .mdview-table-scroll table, .mdview-table-scroll table { display: table; table-layout: fixed; border-collapse: collapse; margin: 0; }
+.mdview-table-scroll th, .mdview-table-scroll td { box-sizing: border-box; min-width: 50px; overflow-wrap: anywhere; }
+.table-width-controls { margin-bottom: 4px; color: var(--muted, CanvasText); font: 12px/1.4 system-ui, sans-serif; }
+/* Busy/read-only transitions must not collapse rows above the viewport. */
+.table-width-controls[hidden] { display: block !important; visibility: hidden; }
+.table-width-controls button { box-sizing: border-box; color: inherit; background: var(--surface, Canvas); border: 1px solid var(--border, GrayText); border-radius: 3px; padding: 2px 8px; touch-action: none; cursor: ew-resize; }
+.table-width-controls button:focus-visible { outline: 2px solid var(--accent, Highlight); outline-offset: -2px; }
+.table-width-controls button:hover, .table-resizing .table-width-controls { color: var(--accent, Highlight); }
+.table-column-widths { display: flex; margin-top: 3px; }
+.table-column-widths button { flex: 0 0 auto; border-right: 3px solid var(--accent, Highlight); height: 22px; min-width: 50px; }
+.table-resizing { cursor: ew-resize; user-select: none; }
 .table-context-menu {
   position: fixed; z-index: 2000; box-sizing: border-box;
   width: 270px; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px); overflow: auto;

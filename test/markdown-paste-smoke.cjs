@@ -16,12 +16,18 @@ async function smoke({win, outputDirectory}) {
     await settle();
   }
   async function paste(text, html, literal = false) {
+    win.focus();
+    await run('e.view.focus()');
+    for (let i=0;i<200 && !(await run('document.hasFocus() && document.activeElement === e.view.dom'));i++) await new Promise(resolve=>setTimeout(resolve,25));
+    assert.equal(await run('document.hasFocus() && document.activeElement === e.view.dom'),true,'native paste target has focus');
     await clipboard.write([new ClipboardItem({'text/plain':text,...(html ? {'text/html':html} : {})})]);
-    await run(`window.pasteTrusted=false;e.view.dom.addEventListener('paste',event=>{window.pasteTrusted=event.isTrusted},{once:true});e.view.focus()`);
+    assert.equal((await clipboard.readText()).replace(/\r\n?/g,'\n'),text.replace(/\r\n?/g,'\n'),'clipboard fixture is published before native input');
+    await run(`window.pasteTrusted=false;e.view.dom.addEventListener('paste',event=>{window.pasteTrusted=event.isTrusted;window.pasteInput=event.clipboardData.getData('text/plain')},{once:true});e.view.focus()`);
     win.webContents.sendInputEvent({type:'keyDown',keyCode:'v',modifiers:literal ? ['control','shift'] : ['control']});
     win.webContents.sendInputEvent({type:'keyUp',keyCode:'v',modifiers:literal ? ['control','shift'] : ['control']});
     await settle();
     assert.equal(await run('pasteTrusted'),true,'native clipboard paste');
+    assert.equal(await run('pasteInput.replace(/\\r\\n?/g,"\\n")'),text.replace(/\r\n?/g,'\n'),'native paste receives the intended clipboard fixture');
   }
   async function structure() {
     assert.deepEqual(await run(`({headings:e.view.dom.querySelectorAll('h2').length,tables:e.view.dom.querySelectorAll('table').length,bold:e.view.dom.querySelector('strong')?.textContent,nested:!!e.view.dom.querySelector('ol ul'),code:e.state.doc.content.content.filter(n=>n.type.name==='codeBlock').map(n=>n.textContent)})`),{headings:3,tables:2,bold:'仔细核对',nested:true,code:[literalCode]});

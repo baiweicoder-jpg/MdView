@@ -52,7 +52,7 @@ const english = {
   '文字样式': 'Text style', '段落类型': 'Paragraph type', '正文': 'Paragraph', '标题 1': 'Heading 1', '标题 2': 'Heading 2', '标题 3': 'Heading 3',
   '加粗': 'Bold', '斜体': 'Italic', '加粗（Ctrl+B）': 'Bold (Ctrl+B)', '斜体（Ctrl+I）': 'Italic (Ctrl+I)', '段落与内容': 'Paragraphs and content',
   '无序列表': 'Bullet list', '有序列表': 'Numbered list', '引用': 'Quote', '代码块': 'Code block', '表格': 'Table', '插入三行三列表格': 'Insert a 3 × 3 table',
-  '插入表格': 'Insert table', '在当前行后添加一行': 'Add a row after the current row', '添加行': 'Add row', '删除当前表格': 'Delete current table', '删除表格': 'Delete table',
+  '插入表格': 'Insert table', '表格行数（含表头）': 'Rows (including header)', '请输入 1–100 的整数': 'Enter an integer from 1–100', '按指定行数插入三列表格': 'Insert a three-column table with the chosen row count', '在当前行后添加一行': 'Add a row after the current row', '添加行': 'Add row', '删除当前表格': 'Delete current table', '删除表格': 'Delete table',
   '编辑历史': 'Edit history', '撤销': 'Undo', '重做': 'Redo', '撤销（Ctrl+Z）': 'Undo (Ctrl+Z)', '重做（Ctrl+Shift+Z）': 'Redo (Ctrl+Shift+Z)', '保存文档': 'Save document',
   '直接在正文中编辑。保存时会规范化 Markdown 排版。': 'Edit directly in the document. Saving normalizes Markdown formatting.',
   '就绪': 'Ready', '单独查看代码': 'View code', 'Ctrl＋滚轮缩放 · 点击百分比恢复默认': 'Ctrl + wheel to zoom · Click percentage to reset', '关闭 Esc': 'Close Esc',

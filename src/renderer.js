@@ -424,6 +424,7 @@ function refreshOutline(root, headings) {
   }, { root: reader, rootMargin: '0px 0px -65% 0px' });
   for (const heading of elements) observer.observe(heading);
 }
+MdViewExternalLinks.install(document, href => perform(() => window.mdview.external(href)));
 document.addEventListener('click', event => {
   const wrap = event.target.closest('.wrap-code');
   if (wrap) {
@@ -474,7 +475,7 @@ document.addEventListener('click', event => {
       const target = outlineTargets.get(id) || (!editing && [...$('#content').querySelectorAll('[id]')].find(element => element.id === id));
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch { toast('无法定位此章节'); }
-  } else if (/^https?:\/\//i.test(href)) perform(() => window.mdview.external(href));
+  } // External anchors are handled by the trusted-gesture delegate above.
   else toast('首版仅支持文内目录和网页链接；其他文档请通过打开文件读取。');
 });
 let dragDepth = 0;
@@ -685,7 +686,14 @@ $('#editor-tools').addEventListener('click', event => {
   const action = event.target.closest('[data-edit]')?.dataset.edit;
   if (!action || !richEditor || fileBusy || !editing) return;
   const chain = richEditor.editor.chain().focus();
-  if (action === 'table') chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  if (action === 'table') {
+    const input = $('#insert-table-rows'), rows = Number(input.value);
+    if (!/^[1-9]\d*$/.test(input.value) || !Number.isSafeInteger(rows) || rows > 100) {
+      input.setAttribute('aria-invalid', 'true'); input.reportValidity(); input.focus(); return;
+    }
+    input.removeAttribute('aria-invalid');
+    richEditor.insertTable(rows);
+  }
   else chain[action]().run();
 });
 $('#block-type').addEventListener('change', event => {

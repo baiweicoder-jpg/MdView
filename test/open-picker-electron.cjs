@@ -16,6 +16,8 @@ app.on('browser-window-created', (_event, win) => {
   let win;
   try {
     ({ win } = await require('../src/main.cjs'));
+    // Disable throttling on the loaded renderer as well as the native window.
+    win.webContents.setBackgroundThrottling(false);
     const run = code => win.webContents.executeJavaScript(code, true);
     const wait = async code => { for (let i = 0; i < 200; i++) { if (await run(code)) return; await new Promise(r => setTimeout(r, 20)); } assert.fail(code); };
     await wait('!!currentDocument && !restoringView');

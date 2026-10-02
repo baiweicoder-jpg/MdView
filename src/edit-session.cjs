@@ -131,6 +131,11 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
   async function closeTab(id, source) {
     return exclusive(async () => {
       if (active && typeof source === 'string') updateSource(active.id, source);
+      return closeOne(id);
+    });
+  }
+
+  async function closeOne(id) {
       const index = tabs.findIndex(tab => tab.id === id);
       if (index < 0) return { ok: true };
       const tab = tabs[index];
@@ -149,8 +154,68 @@ module.exports = function editingSession(win, trusted, welcome, getSettings, per
         else { active = null; pushTabs(); send('document', { ok: true, empty: true }); }
       } else pushTabs();
       return { ok: true };
-    });
   }
+
+  ipcMain.handle('batch-tabs', (event, request) => {
+    trusted(event);
+    if (!request || !['close', 'trash'].includes(request.action) || !Array.isArray(request.ids) || !request.ids.length || request.ids.length > MAX_TABS || request.ids.some(id => !Number.isInteger(id))) throw Error('Invalid batch action');
+    const ids = [...new Set(request.ids)];
+    for (const id of ids) requireTab(id);
+    return exclusive(async () => {
+      const latest = await win.webContents.executeJavaScript('window.mdviewPrepareClose()');
+      if (active) {
+        if (!latest || latest.id !== active.id || typeof latest.source !== 'string') throw Error(t('文档已切换，请重试。'));
+        updateSource(active.id, latest.source);
+        active.viewState = viewState(latest.viewState);
+      } else if (latest !== null) throw Error(t('文档已切换，请重试。'));
+      const completed = [], failures = [];
+      if (request.action === 'trash') {
+        const targets = ids.map(requireTab);
+        if (targets.some(tab => !tab.document.path || pathKey(tab.document.path) === pathKey(welcome))) throw Error(getSettings().language === 'en' ? 'Untitled and built-in documents cannot be deleted. Close the tab instead.' : '未命名和内置文档不能删除磁盘文件，请改用关闭标签。');
+        const choice = await askUnsaved({ kind: 'trash', name: String(targets.length), files: targets.map(tab => ({ name: displayName(tab), path: tab.document.path, dirty: tab.dirty })), language: getSettings().language });
+        if (choice !== 'discard') return { ok: false, canceled: true, completed, failures };
+        const seen = new Set();
+        for (const tab of targets) {
+          const key = pathKey(tab.document.path);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const index = tabs.indexOf(tab), previousActive = active;
+          // Commit exclusion BEFORE trash: a crash cannot restore a deleted path.
+          tabs.splice(index, 1);
+          if (tab === active) active = tabs[Math.min(index, tabs.length - 1)] || null;
+          if (!commit(snapshot())) {
+            tabs.splice(index, 0, tab); active = previousActive; persist(snapshot());
+            failures.push({ id: tab.id, message: '无法更新恢复记录，文件未删除。' }); break;
+          }
+          try { await shell.trashItem(tab.document.path); }
+          catch (error) {
+            tabs.splice(index, 0, tab); active = previousActive;
+            const durable = commit(snapshot());
+            persist(snapshot());
+            failures.push({ id: tab.id, message: `${displayName(tab)}: ${error.message}${durable ? '' : ' — 恢复记录写入失败，请在退出前重试。'}` });
+            if (!durable) break;
+            continue;
+          }
+          completed.push(tab.id);
+        }
+        pushTabs();
+        // Present once, only if the visible document was actually removed.
+        if (latest && completed.includes(latest.id)) {
+          if (active) setActive(active);
+          else send('document', { ok: true, empty: true });
+        }
+        return { ok: !failures.length, completed, failures };
+      }
+      for (const id of ids) {
+        try {
+          const result = await closeOne(id);
+          if (!result.ok) return { ...result, completed, failures };
+          completed.push(id);
+        } catch (error) { failures.push({ id, message: error.message }); break; }
+      }
+      return { ok: !failures.length, completed, failures };
+    });
+  });
 
   async function confirmAllLeave() {
     for (const tab of tabs) if (tab.document.path && !(await confirmDirty(tab))) return false;

@@ -1,6 +1,39 @@
-import { CellSelection, cellAround, selectedRect } from '@tiptap/pm/tables';
+import { CellSelection, cellAround, selectedRect, addRow, TableMap } from '@tiptap/pm/tables';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
+import { appendTableMergeActions } from './table-merge.js';
+
+function addStyledRow(tr, rect, index) {
+  addRow(tr, rect, index);
+  const table = tr.doc.nodeAt(rect.tableStart - 1), map = TableMap.get(table);
+  let offset = 0;
+  for (let i = 0; i < index; i++) offset += table.child(i).nodeSize;
+  table.child(index).forEach((cell, cellOffset) => {
+    const relative = offset + 1 + cellOffset;
+    const column = map.findCell(relative).left;
+    const reference = rect.table.nodeAt(rect.map.map[column]);
+    tr.setNodeMarkup(rect.tableStart + relative, undefined, { ...cell.attrs,
+      align: reference?.attrs.align || null, colwidth: reference?.attrs.colwidth || null });
+  });
+}
+
+// Reject rather than truncate: a batch is all-or-nothing and one history event.
+export function insertTableRows(editor, amount, before = false) {
+  if (!editor.isEditable || !/^[1-9]\d*$/.test(String(amount))) return false;
+  const count = Number(amount);
+  if (!Number.isSafeInteger(count) || count > 100) return false;
+  let rect;
+  try { rect = selectedRect(editor.state); } catch { return false; }
+  if ((rect.map.height + count) * rect.map.width > 10000) return false;
+  const tr = closeHistory(editor.state.tr);
+  for (let i = 0; i < count; i++) {
+    rect = selectedRect({ doc: tr.doc, selection: tr.selection });
+    addStyledRow(tr, rect, before ? rect.top : rect.bottom);
+  }
+  editor.view.dispatch(tr.scrollIntoView());
+  editor.view.dispatch(closeHistory(editor.state.tr));
+  return true;
+}
 
 const headersKey = new PluginKey('mdviewTableHeaders');
 const installed = new WeakMap();
@@ -71,6 +104,38 @@ export function installTableControls(editor) {
     editor.view.dispatch(closeHistory(editor.state.tr));
     mode = null; anchor = null;
   }
+  function tableEnter(event) {
+    if (event.key !== 'Enter' || event.defaultPrevented || event.isComposing || event.keyCode === 229
+      || editor.view.composing || !editor.isEditable || event.altKey || event.metaKey
+      || (event.ctrlKey && event.shiftKey) || event.target.closest?.('input,textarea,select,button,[contenteditable="false"]')) return;
+    const { state, view } = editor, { selection } = state;
+    if (!(selection instanceof TextSelection) || !selection.empty || selection.$from.parent.type.name !== 'paragraph') return;
+    const $cell = cellAround(selection.$from);
+    if (!$cell) return;
+    const rect = selectedRect(state), first = rect.top === 0, last = rect.bottom === rect.map.height;
+    const above = event.ctrlKey && first, below = event.shiftKey && last;
+    if (!above && !below && (event.ctrlKey || event.shiftKey || !last)) return;
+    const tr = closeHistory(state.tr);
+    if (above || below) {
+      const tablePos = rect.tableStart - 1, edge = above ? tablePos : tablePos + rect.table.nodeSize;
+      const $edge = state.doc.resolve(edge), adjacent = above ? $edge.nodeBefore : $edge.nodeAfter;
+      const reuse = adjacent?.type.name === 'paragraph' && adjacent.content.size === 0;
+      const target = above && reuse ? edge - adjacent.nodeSize : edge;
+      if (!reuse) tr.insert(edge, state.schema.nodes.paragraph.create());
+      tr.setSelection(TextSelection.create(tr.doc, target + 1));
+    } else {
+      if ((rect.map.height + 1) * rect.map.width > 10000) { event.preventDefault(); return; }
+      addStyledRow(tr, rect, rect.map.height);
+      const table = tr.doc.nodeAt(rect.tableStart - 1);
+      let pos = rect.tableStart;
+      for (let r = 0; r < table.childCount - 1; r++) pos += table.child(r).nodeSize;
+      const row = table.lastChild; pos++;
+      for (let c = 0; c < Math.min(rect.left, row.childCount - 1); c++) pos += row.child(c).nodeSize;
+      tr.setSelection(TextSelection.near(tr.doc.resolve(pos + 1)));
+    }
+    event.preventDefault(); event.stopPropagation();
+    view.dispatch(tr.scrollIntoView()); view.dispatch(closeHistory(editor.state.tr));
+  }
   function deleteSelection(event) {
     // Capture on this editor only, before Tiptap's cell-content deletion keymap.
     // A text range (even across cells) is never a structural selection.
@@ -103,15 +168,21 @@ export function installTableControls(editor) {
     const $cell = cellAt(event.target);
     if (!$cell) return;
     event.preventDefault(); event.stopPropagation(); close();
-    if (!contained($cell)) {
+    if (!contained($cell) && !event.mdviewTextSelection) {
       mode = null; anchor = null;
       editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(editor.state.doc.resolve($cell.pos + 1))));
     }
     menu = doc.createElement('div'); menu.className = 'table-context-menu'; menu.setAttribute('role', 'menu');
+    menu.addEventListener('mdview-dismiss-context', () => close());
     menu.setAttribute('aria-label', text('表格操作', 'Table actions'));
     const help = doc.createElement('p'); help.className = 'table-selection-help';
     help.textContent = text('选择行/列后，按住 Shift 点击另一单元格可连续多选；右键高亮区域可删除。', 'Select rows/columns, then Shift-click another cell to extend the range. Right-click the highlight to delete.');
     menu.append(help);
+    const countLabel = doc.createElement('label'); countLabel.className = 'table-row-count-label';
+    countLabel.textContent = text('插入行数（1–100）', 'Rows to insert (1–100)');
+    const countInput = doc.createElement('input'); countInput.type = 'number'; countInput.min = '1'; countInput.max = '100'; countInput.step = '1'; countInput.value = '1'; countInput.dataset.tableRowCount = '';
+    countInput.setAttribute('aria-label', countLabel.textContent); countLabel.append(countInput); menu.append(countLabel);
+    const error = doc.createElement('p'); error.setAttribute('role', 'alert'); error.className = 'table-selection-help'; menu.append(error);
     for (const [name, label] of Object.entries(labels)) {
       const button = doc.createElement('button'); button.type = 'button'; button.dataset.tableAction = name;
       button.setAttribute('role', 'menuitem'); button.textContent = text(...label);
@@ -120,11 +191,17 @@ export function installTableControls(editor) {
       button.addEventListener('click', () => {
         if (!editor.isEditable) { close(); return; }
         if (name === 'selectRows' || name === 'selectColumns') select(name === 'selectRows' ? 'row' : 'column', $cell);
-        else structuralAction(name);
+        else if (name === 'addRowBefore' || name === 'addRowAfter') {
+          if (!insertTableRows(editor, countInput.value, name === 'addRowBefore')) {
+            error.textContent = text('请输入 1–100 的整数；表格最多 10000 个单元格。', 'Enter an integer from 1–100; maximum 10000 table cells.');
+            countInput.setAttribute('aria-invalid', 'true'); countInput.focus(); return;
+          }
+        } else structuralAction(name);
         close(true);
       });
       menu.append(button);
     }
+    appendTableMergeActions(menu, editor, $cell.pos + 1, close, text);
     doc.body.append(menu);
     // CSSOM positioning works with the app's strict style-src 'self' CSP.
     menu.style.left = `${Math.max(4, Math.min(event.clientX, win.innerWidth - menu.offsetWidth - 4))}px`;
@@ -135,7 +212,7 @@ export function installTableControls(editor) {
   function key(event) {
     if (!menu) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); }
-    else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) && !event.target.closest?.('input')) {
       event.preventDefault();
       const buttons = [...menu.querySelectorAll('button:not(:disabled)')];
       let index = buttons.indexOf(doc.activeElement);
@@ -147,6 +224,7 @@ export function installTableControls(editor) {
     if (tr.docChanged) { close(); mode = null; anchor = null; }
   }
   const onViewport = () => close();
+  root.addEventListener('keydown', tableEnter, true);
   root.addEventListener('keydown', deleteSelection, true);
   root.addEventListener('mousedown', mousedown, true);
   root.addEventListener('contextmenu', context, true);
@@ -156,7 +234,7 @@ export function installTableControls(editor) {
   win.addEventListener('scroll', onViewport, true);
   editor.on('transaction', transaction);
   const api = { destroy() {
-    close(); root.removeEventListener('keydown', deleteSelection, true);
+    close(); root.removeEventListener('keydown', tableEnter, true); root.removeEventListener('keydown', deleteSelection, true);
     root.removeEventListener('mousedown', mousedown, true); root.removeEventListener('contextmenu', context, true);
     doc.removeEventListener('mousedown', outside, true); doc.removeEventListener('keydown', key, true);
     win.removeEventListener('resize', onViewport); win.removeEventListener('scroll', onViewport, true);

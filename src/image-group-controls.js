@@ -148,6 +148,7 @@ export function installImageGroupControls(editor) {
     close();
     const items = measurements(), range = bounds(items), target = items[0]?.height;
     menu = doc.createElement('div'); menu.className = 'image-group-menu';
+    menu.addEventListener('mdview-dismiss-context', () => close());
     menu.setAttribute('role', 'dialog'); menu.setAttribute('aria-label', text('批量图片尺寸', 'Batch image size'));
     const heading = doc.createElement('strong');
     heading.textContent = text(`已选择 ${items.length} 张图片`, `${items.length} images selected`);

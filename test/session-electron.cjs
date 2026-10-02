@@ -24,6 +24,8 @@ app.on('browser-window-created', (_event, win) => {
 });
 (async () => {
   const { win, editSession, openDocument, sessionStore } = await require('../src/main.cjs');
+  // Disable throttling on the loaded renderer as well as the native window.
+  win.webContents.setBackgroundThrottling(false);
   require('./unsaved-driver.cjs')(win);
   win.showInactive();
   const send = win.webContents.send.bind(win.webContents);

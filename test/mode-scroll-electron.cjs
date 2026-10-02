@@ -43,7 +43,7 @@ const timer = setTimeout(() => { console.error('mode scroll timeout'); app.exit(
     else if (kind === 'menu') { Menu.getApplicationMenu().getMenuItemById('edit-mode').click(); await settle(); }
     else { win.focus(); await settle(); win.webContents.sendInputEvent({type:'keyDown',keyCode:'E',modifiers:['control']}); win.webContents.sendInputEvent({type:'keyUp',keyCode:'E',modifiers:['control']}); await settle(); }
     for (let n=0;n<40 && await run('editing')!==expected;n++) await settle();
-    if (await run('editing') !== expected) console.log('KEY FAILURE', await run('({notice:$("#toast").textContent,sourceChanged:payload().source!==currentDocument.source,selection:richEditor.editor.state.selection.toJSON(),active:document.activeElement?.className})'));
+    if (await run('editing') !== expected) console.log('KEY FAILURE', {windowFocused:win.isFocused(),webContentsFocused:win.webContents.isFocused()}, await run('({notice:$("#toast").textContent,sourceChanged:payload().source!==currentDocument.source,selection:richEditor.editor.state.selection.toJSON(),active:document.activeElement?.className})'));
     assert.equal(await run('editing'), expected, `${kind} toggles mode`);
   };
   for (const [variant, theme] of ['light','dark','warm','review'].entries()) {
@@ -110,7 +110,7 @@ const timer = setTimeout(() => { console.error('mode scroll timeout'); app.exit(
   await run('reader.scrollTo({top:1700,behavior:"instant"});rememberWorkspaceView()'); await settle();
   for (let i=0;i<2;i++) {
     await run(`switchToTab(${first})`); await settle();
-    assert.equal(await run('editing'),true); assert.ok(Math.abs(await run('reader.scrollTop')-firstY)<4);
+    assert.equal(await run('editing'),true); assert.ok(Math.abs(await run('reader.scrollTop')-firstY)<4, JSON.stringify({firstY, restored:await run('({top:reader.scrollTop,view:currentDocument.viewState,restoringView})')}));
     assert.equal(await run('payload().source'),dirty);
     await run(`switchToTab(${second})`); await settle();
     assert.equal(await run('editing'),false); assert.ok(Math.abs(await run('reader.scrollTop')-1700)<4);
@@ -118,7 +118,10 @@ const timer = setTimeout(() => { console.error('mode scroll timeout'); app.exit(
   // Navigation following the toggle must not be undone by a delayed restorer.
   await toggle('button');
   await run('document.querySelector("#outline a:last-child").click()');
-  await new Promise(resolve=>setTimeout(resolve,1000));
+  // Smooth scrolling is asynchronous; observe the actual destination instead
+  // of assuming the long document settles in 1s, then check it stays there.
+  for (let i = 0; i < 200 && !(await run('reader.scrollTop>reader.scrollHeight*.85')); i++) await new Promise(resolve=>setTimeout(resolve,25));
+  await settle();
   assert.ok(await run('reader.scrollTop>reader.scrollHeight*.85'), 'outline remains live');
   assert.equal(await run('restoringView'),false);
   for (const mode of ['edit','read']) {

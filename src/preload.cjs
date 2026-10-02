@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('mdview', {
   newDocument: () => ipcRenderer.invoke('new-document'),
   switchTab: payload => ipcRenderer.invoke('switch-tab', payload),
   closeTab: payload => ipcRenderer.invoke('close-tab', payload),
+  batchTabs: request => ipcRenderer.invoke('batch-tabs', request),
   onTabs: callback => ipcRenderer.on('tabs', (_event, value) => callback(value)),
   onCloseTabRequest: callback => ipcRenderer.on('close-tab-request', () => callback()),
   onNextTabRequest: callback => ipcRenderer.on('next-tab-request', () => callback()),

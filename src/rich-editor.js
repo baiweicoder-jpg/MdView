@@ -5,9 +5,11 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import hljs from 'highlight.js/lib/common';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
-import { TableKit, TableCell, TableHeader } from '@tiptap/extension-table';
+import { TableKit } from '@tiptap/extension-table';
+import { WidthTable, WidthCell, WidthHeader } from './table-width.js';
 import Image from '@tiptap/extension-image';
 import { markdownEditingExtensions, serializeMarkdown } from './markdown-extensions.js';
+import { OrderedListContinuity } from './list-continuity.js';
 import { installContentSearch } from './content-search-editor.js';
 import { installTableControls } from './table-controls.js';
 import { installImageGroupControls } from './image-group-controls.js';
@@ -450,10 +452,18 @@ export function create(element, doc, onChange) {
     }
   });
   const content = prepareEditorHtml(doc.editorHtml);
+  // WidthCell/WidthHeader consume the safe alignment class directly. Do not
+  // reparse CSSOM alignment as inline styles under the production CSP.
+  for (const cell of content.querySelectorAll('th,td')) {
+    if (['left','center','right'].some(a => cell.classList.contains(`align-${a}`))) cell.removeAttribute('style');
+  }
   const editor = new Editor({
+    // Styles are shipped as external CSS; Tiptap's injected <style> is blocked by
+    // the production CSP (and otherwise emits a violation on every remount).
+    injectCSS: false,
     element,
     // Pasting a URL replaces selected content; it must not turn that content into a link.
-    extensions: [StarterKit.configure({ underline: false, link: { openOnClick: false, linkOnPaste: false }, undoRedo: {} }), Markdown, ...markdownEditingExtensions, SafeImage.configure({ allowBase64: true, inline: true }), ImagePaste, markdownPaste(doc, reportPasteError), ImageMove, CodeStyle, TableKit.configure({ tableCell: false, tableHeader: false }), TableCell.extend({ content: 'paragraph' }), TableHeader.extend({ content: 'paragraph' })],
+    extensions: [StarterKit.configure({ orderedList: false, listItem: false, underline: false, link: { openOnClick: false, linkOnPaste: false, HTMLAttributes: { tabindex: '0' } }, undoRedo: {} }), Markdown, OrderedListContinuity, ...markdownEditingExtensions, SafeImage.configure({ allowBase64: true, inline: true }), ImagePaste, markdownPaste(doc, reportPasteError), ImageMove, CodeStyle, TableKit.configure({ table: false, tableCell: false, tableHeader: false }), WidthTable, WidthCell, WidthHeader],
     content: content.innerHTML,
     editorProps: { attributes: { 'aria-label': '直接编辑 Markdown 内容', role: 'textbox', 'aria-multiline': 'true' } },
     onUpdate: () => onChange(),
@@ -467,6 +477,13 @@ export function create(element, doc, onChange) {
   return {
     editor,
     searchHighlights,
+    insertTable(rows) {
+      if (!editor.isEditable || !Number.isSafeInteger(rows) || rows < 1 || rows > 100) return false;
+      editor.view.dispatch(closeHistory(editor.state.tr));
+      const inserted = editor.chain().focus().insertTable({ rows, cols: 3, withHeaderRow: true }).run();
+      editor.view.dispatch(closeHistory(editor.state.tr));
+      return inserted;
+    },
     planCleanup: kind => planCleanup(editor.state, kind),
     applyCleanup: plan => applyCleanup(editor, plan),
     deleteSearchMatch(hit, query, caseSensitive) {

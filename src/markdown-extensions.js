@@ -1,5 +1,39 @@
 import { Mark, Extension, markInputRule, markPasteRule } from '@tiptap/core';
-import { TaskList, TaskItem } from '@tiptap/extension-list';
+import { TaskList, TaskItem, OrderedList, ListItem, getListMarker } from '@tiptap/extension-list';
+import { renderNestedMarkdownContent } from '@tiptap/core';
+
+// Upstream 3.31 uses `start || 1` in both Markdown paths, losing explicit
+// zero starts. Keep PM's start attribute (not prosemirror-schema-list's order).
+export const MarkdownOrderedList = OrderedList.extend({
+  markdownTokenizer: {
+    ...OrderedList.config.markdownTokenizer,
+    tokenize(source, tokens, lexer) {
+      const token = OrderedList.config.markdownTokenizer.tokenize(source, tokens, lexer);
+      if (token && /^\s*0+[.)]\s/.test(source)) token.start = 0;
+      return token;
+    },
+  },
+  parseMarkdown(token, helpers) {
+    const parsed = OrderedList.config.parseMarkdown(token, helpers);
+    if (parsed && !Array.isArray(parsed) && token.start === 0) parsed.attrs = { ...parsed.attrs, start: 0 };
+    return parsed;
+  },
+});
+export const MarkdownListItem = ListItem.extend({
+  renderMarkdown(node, helpers, context) {
+    // CommonMark cannot interrupt a paragraph with an ordered start other
+    // than 1. Without this blank boundary the reader turns nested 0/5 into prose.
+    const nested = { ...helpers, renderChild(child, index) {
+      const rendered = helpers.renderChild(child, index);
+      return child.type === 'orderedList' && (child.attrs?.start ?? 1) !== 1 ? '\n' + rendered : rendered;
+    } };
+    return renderNestedMarkdownContent(node, nested, ctx => {
+      if (ctx.parentType !== 'orderedList') return '- ';
+      const start = ctx.meta?.parentAttrs?.start ?? 1;
+      return getListMarker(ctx.meta?.parentAttrs?.type, start - 1 + (ctx.index ?? 0), '. ');
+    }, context, { alignNestedToPrefix: context?.parentType === 'orderedList' });
+  },
+});
 import Underline from '@tiptap/extension-underline';
 
 // Tiptap 3.31 handles text before extension renderMarkdown handlers and only
@@ -132,7 +166,17 @@ export const MarkdownUnderline = Underline.extend({
 
 // GFM permits plain and task items in the same list. Retain plain siblings.
 export const MarkdownTaskList = TaskList.extend({ content: '(taskItem | listItem)+' });
-export const MarkdownTaskItem = TaskItem.configure({ nested: true });
+export const MarkdownTaskItem = TaskItem.extend({
+  renderMarkdown(node, helpers) {
+    // Match MarkdownListItem's structural boundary without changing task
+    // prefixes, checked state, marks, or the upstream nesting indentation.
+    const nested = { ...helpers, renderChild(child, index) {
+      const rendered = helpers.renderChild(child, index);
+      return child.type === 'orderedList' && (child.attrs?.start ?? 1) !== 1 ? '\n' + rendered : rendered;
+    } };
+    return TaskItem.config.renderMarkdown(node, nested);
+  },
+}).configure({ nested: true });
 export const InsertDate = Extension.create({
   name: 'insertDate',
   addCommands() {
@@ -145,4 +189,4 @@ export const InsertDate = Extension.create({
     };
   },
 });
-export const markdownEditingExtensions = [MarkdownHighlight, MarkdownTextColor, MarkdownUnderline, MarkdownTaskList, MarkdownTaskItem, InsertDate];
+export const markdownEditingExtensions = [MarkdownOrderedList, MarkdownListItem, MarkdownHighlight, MarkdownTextColor, MarkdownUnderline, MarkdownTaskList, MarkdownTaskItem, InsertDate];

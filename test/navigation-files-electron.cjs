@@ -1,0 +1,66 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {app, shell} = require('electron');
+const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || app.getPath('temp'), 'mdview-navigation-'));
+const files=Array.from({length:14},(_,i)=>path.join(dir,`synthetic-${i}-long-filename-document.md`));
+for(const [i,file] of files.entries())fs.writeFileSync(file,`# Synthetic ${i}\n\nneedle ${i}\n`);
+fs.mkdirSync(path.join(dir,'profile'));
+fs.writeFileSync(path.join(dir,'profile/session.json'),JSON.stringify({version:2,tabs:files.map(file=>({path:file,viewState:{editing:false,scrollTop:0}})),activeIndex:13}));
+app.setPath('userData',path.join(dir,'profile'));
+app.disableHardwareAcceleration();
+app.on('browser-window-created',(_event,win)=>{win.hide();win.setSkipTaskbar(true);win.webContents.setBackgroundThrottling(false);});
+(async()=>{
+ const {win,editSession,sessionStore}=await require('../src/main.cjs');
+ // Disable throttling on the loaded renderer as well as the native window.
+ win.webContents.setBackgroundThrottling(false);
+ const run=code=>win.webContents.executeJavaScript(code,true);
+ const wait=async code=>{for(let i=0;i<240;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,25));}assert.fail(code);};
+ const errors=[];win.webContents.on('console-message',event=>{if(event.level==='error') errors.push(event.message);});
+ await wait('!!currentDocument && !restoringView');
+ const ids=await run('tabs.map(t=>t.id)');
+ const visible=()=>run('(()=>{const b=$("#tab-bar").getBoundingClientRect(),t=$("#tab-bar .tab.active").getBoundingClientRect();return t.left>=b.left-1 && t.right<=b.right+1})()');
+ assert.equal(await visible(),true,'recovered final active tab is visible');
+ await run(`window.mdview.closeTab({id:${ids.at(-1)},source:payload().source})`);await wait('!restoringView && tabs.length===13');
+ await editSession.openDocuments([files.at(-1)]);await wait('!fileBusy && !restoringView && tabs.length===14');
+ ids[ids.length-1]=await run('currentDocument.id');
+ assert.equal(await visible(),true,'open reveals last tab using Chromium rectangles');
+ await run(`switchToTab(${ids[0]})`);await wait(`!restoringView && currentDocument.id===${ids[0]}`);assert.equal(await visible(),true,'switch reveals first tab');
+ await run('$("#opened-files-search").focus();$("#tab-bar").scrollLeft=1000');
+ const before=await run('({left:$("#tab-bar").scrollLeft,top:reader.scrollTop,focus:document.activeElement.id})');
+ await run('renderTabs()');await new Promise(r=>setTimeout(r,75));
+ assert.deepEqual(await run('({left:$("#tab-bar").scrollLeft,top:reader.scrollTop,focus:document.activeElement.id})'),before,'same active ID preserves manual scroll and focus');
+ await run('window.mdviewSearch.open("all");$("#document-search-query").value="needle 13";$("#document-search-query").dispatchEvent(new Event("input"))');
+ await wait('!window.mdviewSearch.pending && window.mdviewSearch.total===1');
+ await run('$("#document-search-results button").click()');await wait(`currentDocument.id===${ids.at(-1)} && !restoringView`);
+ assert.equal(await visible(),true,'search navigation reveals active filename');
+ await run(`window.mdviewSearch.close();switchToTab(${ids[0]})`);await wait('!restoringView');
+ await run('$("#sidebar-tab-files").click()');
+ await run(`document.querySelector('.sidebar-file[data-id="${ids[1]}"]').dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true}));document.querySelector('.sidebar-file[data-id="${ids[3]}"]').dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey:true}))`);
+ assert.equal(await run('document.querySelectorAll(".sidebar-file-select:checked").length'),3);
+ assert.equal(await run('currentDocument.id'),ids[0],'multiselect does not switch');
+ await run('$("#opened-files-search").value="synthetic-2-";$("#opened-files-search").dispatchEvent(new Event("input"));$("#opened-files-all").click()');
+ assert.equal(await run('document.querySelectorAll(".sidebar-file-select:checked").length'),1,'select all scope is visible filtered list');
+ await run('$("#opened-files-search").value="";$("#opened-files-search").dispatchEvent(new Event("input"));$("#opened-files-clear").click()');
+ await run(`switchToTab(${ids[0]})`);await wait('!restoringView');await run('toggleEditing()');await wait('editing && !restoringView');
+ await run('richEditor.editor.commands.insertContentAt(1,"UNSAVED ")');const draft=await run('payload().source');
+ await run(`document.querySelector('.sidebar-file-entry[data-id="${ids[0]}"] input').click();document.querySelector('.sidebar-file-entry[data-id="${ids[1]}"] input').click();$("#opened-files-trash").click()`);
+ await wait('$("#unsaved-dialog").open');assert.equal(await run('$("#unsaved-dialog").dataset.kind'),'trash');
+ assert.match(await run('$("#unsaved-name").textContent'),/synthetic-0/);assert.equal(await run('$("#unsaved-dialog [data-choice=save]").hidden'),true);
+ await run('$("#unsaved-dialog [data-choice=cancel]").click()');await wait('!fileBusy');assert.equal(await run('payload().source'),draft);assert.ok(fs.existsSync(files[0]));
+ const originalTrash=shell.trashItem,trashed=[];
+ // Synthetic fixture only; never invoke OS trash against user files.
+ shell.trashItem=async file=>{assert.ok(files.includes(file));if(file===files[1])throw Error('synthetic trash denied');trashed.push(file);fs.renameSync(file,file+'.trashed');};
+ try {
+   await run('$("#opened-files-trash").click()');await wait('$("#unsaved-dialog").open');await run('$("#unsaved-dialog [data-choice=discard]").click()');await wait('!fileBusy && !restoringView');
+   assert.deepEqual(trashed,[files[0]]);assert.ok(fs.existsSync(files[1]));assert.ok(!editSession.snapshot().tabs.some(t=>t.path===files[0]));
+   assert.ok(sessionStore.flush());assert.ok(!JSON.parse(fs.readFileSync(path.join(dir,'profile/session.json'),'utf8')).tabs.some(t=>t.path===files[0]));
+   assert.equal(await run(`tabs.some(t=>t.id===${ids[1]})`),true,'failed trash tab retained');
+ } finally {shell.trashItem=originalTrash;}
+ const previous=await run('currentDocument.id');await run('window.mdview.newDocument()');await wait(`currentDocument.id!==${previous} && !restoringView`);
+ await run('$("#opened-files-clear").click();document.querySelector(`.sidebar-file-entry[data-id="${currentDocument.id}"] input`).click()');
+ assert.equal(await run('$("#opened-files-trash").disabled'),true,'untitled disk delete disabled');
+ assert.equal(errors.length,0,errors.join('\n'));
+ console.log('NAVIGATION FILES PASS: geometry/manual scroll, sidebar range/filter, cancel/trash partial failure, durable exclusion, untitled protection');
+ app.exit(0);
+})().catch(error=>{console.error(error);app.exit(1);});

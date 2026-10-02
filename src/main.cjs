@@ -100,13 +100,12 @@ module.exports = app.whenReady().then(async () => {
   ipcMain.handle('reload-document', event => { trusted(event); return reloadDocument(); });
   ipcMain.handle('external', async (event, href) => {
     trusted(event);
-    if (typeof href !== 'string' || href.length > 8192) return;
-    const url = new URL(href);
-    if (url.protocol === 'https:' || url.protocol === 'http:') await shell.openExternal(url.href);
+    const target = require('./external-links.js').validTarget(href);
+    if (target) await shell.openExternal(target);
   });
   ipcMain.handle('copy', (event, text) => {
     trusted(event);
-    if (typeof text === 'string' && text.length <= 10 * 1024 * 1024) require('electron').clipboard.writeText(text);
+    if (typeof text === 'string' && text.length <= 10 * 1024 * 1024) return require('electron').clipboard.writeText(text);
   });
   const menuState = {};
   const { accelerator: shortcutAccelerator } = require('./shortcuts-data.js');

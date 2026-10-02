@@ -10,6 +10,8 @@ process.on('uncaughtException', e => { console.error(e); app.exit(1); });
 app.on('browser-window-created', (_e, win) => { win.setOpacity(0); win.webContents.setBackgroundThrottling(false); win.show(); });
 (async () => {
   const { win, editSession, openDocument, sessionStore } = await require('../src/main.cjs');
+  // Disable throttling on the loaded renderer as well as the native window.
+  win.webContents.setBackgroundThrottling(false);
   const run = code => win.webContents.executeJavaScript(code, true);
   const wait = async code => { for(let i=0;i<200;i++) { if(await run(code)) return; await new Promise(r=>setTimeout(r,25)); } assert.fail(code); };
   await wait('!!currentDocument && !restoringView');
@@ -82,9 +84,14 @@ app.on('browser-window-created', (_e, win) => { win.setOpacity(0); win.webConten
       if (choice) nativeMenu.getMenuItemById(choice).click();
       nativeMenu.closePopup(win);
     };
+    // The preceding tab action already copied this same path. Clear it so a
+    // stale clipboard cannot pass before the sidebar menu's asynchronous
+    // close callback -> renderer IPC -> file action has actually completed.
+    await clipboard.clear();
     await sidebarMenu(firstId, 'copy-path');
-    await wait('!fileBusy');
+    for(let i=0;i<100&&(await clipboard.readText())!==first;i++) await new Promise(r=>setTimeout(r,25));
     assert.equal(await clipboard.readText(), first);
+    await wait('!fileBusy');
     assert.equal(await run('currentDocument.id'), secondId, 'sidebar right click does not activate the target');
     let revealed;
     shell.showItemInFolder = file => { revealed = file; };

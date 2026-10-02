@@ -18,3 +18,13 @@ body.sidebar-resizing, body.sidebar-resizing * { cursor: col-resize !important; 
 .sidebar-file-dirty { color: var(--number); font-size: 9px; flex-shrink: 0; }
 #opened-files-empty { color: var(--muted); font-size: 12px; padding: 8px; }
 #sidebar button:focus-visible, #opened-files-search:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#opened-files-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+#opened-files-actions button { font-size: 11px; padding: 5px 6px; }
+#opened-files-count, #opened-files-selection-hint { font-size: 11px; color: var(--muted); margin: 3px 0 7px; }
+.sidebar-file-entry { display: flex; align-items: center; min-width: 0; border-radius: 5px; }
+.sidebar-file-entry.selected { background: var(--accent-soft); outline: 1px solid var(--border); outline-offset: -1px; }
+.sidebar-file-entry .sidebar-file { flex: 1; min-width: 0; }
+.sidebar-file-select { flex: 0 0 auto; margin: 0 4px; accent-color: var(--accent); }
+.sidebar-file-select:focus-visible { outline: 2px solid var(--accent); }
+#unsaved-dialog[data-kind="trash"] #unsaved-name { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 35vh; overflow: auto; }
+#unsaved-dialog [hidden] { display: none; }

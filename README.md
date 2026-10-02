@@ -11,7 +11,9 @@ npm ci
 npm run icons
 npm start
 npm test
-npm run test:desktop
+npm run test:session
+npm run test:acceptance
+npm run build
 npm run package
 npm run release
 ```
@@ -30,7 +32,14 @@ npm run release
 
 ## 使用
 
-### 文本清理 / Text cleanup
+### 列表与纯文本复制 / Lists and plain-text copy
+
+- 删除有序列表中间项后，后续编号按保留项连续计算；Backspace 将中间项提升为正文而拆分列表时，后半段沿用连续编号。保留明确的独立列表起始值（包括 0）及嵌套列表各自的计数，支持撤销 / 重做和保存重开。
+- 阅读或编辑模式选中文字后，右键提供「无格式复制（带序号）」和「无格式复制（不带序号）」。两者只写入纯文本、去掉空白行；代码缩进及非空行文字保留，表格以 Tab 分隔列。图片及图片说明 / 未加载占位内容省略，链接只保留显示文字，不附带目标地址。
+- 「带序号」保留列表结构序号 / 项目标记，以及开启标题自动序号时的生成前缀；「不带序号」仅省略这些生成的结构标记，**保留正文、代码和标题中手写的数字 / 序号**，不通过正则删改原文。Ctrl+C 仍是原生富文本复制；两种右键操作均不修改文档或撤销历史。
+- **Plain-text copy** offers numbered and unnumbered variants in reader/editor text-selection context menus. Both remove blank lines, omit images (including alt/fallback text), preserve nonblank text/code indentation, and separate table cells with tabs. Unnumbered copy removes generated structural markers only, never manually written numbers. Ctrl+C keeps native rich-text behavior. Ordered lists retain zero/custom starts and independent nested counters.
+
+### 清理操作 / Cleanup actions
 
 - 搜索栏的 **删除当前匹配 / Delete current match** 仅删除当前文档中高亮的那一个匹配（包括跨加粗等行内格式、代码中的精确文字），不会批量删除其他结果。仅编辑模式可用；阅读时提示「切换编辑后可用」，空查询、无匹配、搜索中或文件忙碌时禁用。所有文档搜索中先点击目标结果，经正常草稿同步切换到该文档，再删除；不在后台静默修改其他文档。删除后重新搜索，可一次撤销，不保存磁盘文件。
 - **编辑模式 → 右侧格式面板 → 文本清理** 提供「删除换行」「删除空白行」「清理多余空格」。优先处理非空选区，否则处理整个当前文档；弹框先显示范围、文档名称、保守规则和预计修改处数，默认聚焦取消；确认才执行，无变化时确认不可用。每次清理一个撤销步骤，不自动保存；文档切换或内容变化会取消过期预览。
@@ -57,6 +66,10 @@ Default off, persisted locally, and display-only in reader/editor/outline. Missi
 - 已保存文件：创建取文件系统 `birthtime`，更新取磁盘 `mtime`，**不包含未保存编辑**；成功保存 / 另存为 / 重新读取后刷新目标文件的实际时间。原子保存可能替换文件，创建时间遵循目标文件系统的报告，不伪装为原稿最初写作时间；不以 `ctime` 代替创建时间。
 - 未命名草稿：创建取新建时刻，更新仅随实际 Markdown 源码变化（包括改变源码的格式编辑、撤销 / 重做）刷新；聚焦、选择、主题 / 字号 / 搜索、重复无变化通知不会更新时间。时间随草稿恢复保存；旧版恢复记录缺少时间、时间无效或文件系统不提供创建时间时显示 `—`，不会补造历史时间。日期不插入 Markdown 正文或 frontmatter。
 - 左侧共用「文档目录 / 打开的文档」面板，支持按文件名或路径搜索已打开文件；拖动右边缘调整宽度并记忆，双击恢复默认宽度。
+- 打开、恢复或切换到横向标签栏外的文档时，标签栏仅沿水平方向滚动以显示当前文件名，不改变正文滚动或抢焦点；同一标签的普通刷新保留手动滚动位置。
+- 「打开的文档」支持复选框 / Ctrl 多选、Shift 连选，以及全选当前筛选结果 / 清除选择。筛选会把选择限制在当前可见结果。「关闭标签」不删除磁盘文件，未保存项逐个走保存 / 不保存 / 取消；取消停止后续关闭，已完成的关闭不回滚。
+- 「删除文件…」与关闭分开，确认后将实际文件移到回收站，所选文件的未保存修改会丢弃；未命名草稿不能删除磁盘文件，欢迎文档受保护。失败文件保留标签并报告，成功项才关闭并从恢复记录移除；批量操作不是整体事务，不提供永久删除。
+- **Open files** supports checkbox/Ctrl selection, Shift ranges, and filtered Select all. Close tabs preserves disk files and asks about dirty drafts; Delete files is a separate confirmed Recycle Bin action, not permanent deletion. Untitled/welcome documents are protected; failures retain their tabs, and successful earlier operations are not rolled back. Active tabs are revealed horizontally without scrolling document content.
 - `Ctrl+F` 搜索当前文档正文；`Ctrl+Shift+F` 搜索所有打开的文档，也可在「编辑」菜单打开。搜索栏支持切换范围、`Aa` 区分大小写、上 / 下一个、`Enter` / `Shift+Enter` 循环定位，`Escape` / `×` 关闭。全局结果显示文件名与纯文本摘要，点击保留当前修改并切换到正确的匹配位置；未命名、当前与后台标签的未保存草稿均参与搜索，不只搜索磁盘文件。左侧文件名过滤仍独立保留。
 - 正文搜索按字面匹配（默认不区分大小写、不支持用户正则），包含标题、列表、表格和折叠代码；支持跨行内格式，不跨段落 / 单元格，不搜索 Markdown 标记、链接目标或图片二进制 / 说明。搜索不修改源码、正文选区或撤销历史，定位折叠代码时会展开该块。查询最多 256 个 UTF-16 单元；160 ms 防抖，后台线程逐标签扫描，取消旧任务。沿用最多 100 个标签、每份文档 10 MB 的限制；完整统计总匹配数，但最多显示 / 高亮 / 循环定位前 500 个，超出时明确提示，可缩小范围或细化查询。空查询与无匹配会清除高亮。
 - 启动自动恢复上次打开的文件、标签顺序、当前标签、编辑模式和滚动位置（最多 100 个标签）。未命名文档内容备份在本机用户数据目录，退出无需先另存为，下次恢复草稿；备份失败会阻止退出。已有磁盘文件的未保存修改仍需确认保存 / 不保存 / 取消。缺失或无法读取的文件会跳过。
@@ -101,11 +114,20 @@ Default off, persisted locally, and display-only in reader/editor/outline. Missi
 - 全选后粘贴会替换全部内容，局部选中则替换选区，支持文字、网址与 PNG 图片；粘贴网址不再仅给原选区添加链接。
 - 编辑器 `Ctrl+V` 自动识别 Markdown 源码：标题、围栏代码、连续列表项、管道表格、成对加粗 / 高亮、Markdown 链接及受限下划线 / 颜色语法。在当前光标或选区插入结构化内容，保留前后正文，一次撤销可恢复；不在每次输入时重解析全文。即使浏览器同时提供 HTML，明确的 Markdown 源码也优先按 Markdown 解析；普通富文本仍保留原有 HTML 粘贴行为，普通段落与独立网址不触发转换。
 - `Ctrl+Shift+V` 保留纯文本，不转换 Markdown；在代码块内粘贴始终保留源码（含 `@url:` 文本），不执行或请求其中的地址。图片粘贴优先级不变。Markdown 粘贴源码及插入后保存内容均限 10 MB（UTF-8）；超限保持原文并提示。解析沿用受限规则，原始 HTML / SVG 不执行，网络图片不加载。
-- 表格中右击单元格选择行 / 列，再 Shift 点击另一单元格可连续多选；右击高亮区域可批量删除，也可在当前位置上方 / 下方插入行、左侧 / 右侧插入列，支持撤销。
+- 表格中右击单元格选择行 / 列，再 Shift 点击另一单元格可连续多选；右击高亮区域可批量删除，也可在当前位置上方 / 下方插入行、左侧 / 右侧插入列，支持撤销。右键菜单的「插入行数」接受 **1–100 的整数**，上 / 下方插入以当前行或行选区边界为准；整批一次撤销，超过 10000 个单元格则整体拒绝，不截断。首行始终是唯一表头。
+- 表格右键「**与下一个表格合并**」（或「合并上方表格」）按文档顺序纵向追加。仅支持列数相同的顶层简单表格，相邻或仅隔无格式空白段落；不跨正文、代码、列表或含链接 / 图片 / 换行节点的段落，不支持跨行 / 跨列 / 嵌套表格。无法合并时按钮禁用并显示原因，拒绝操作不修改文档。
+- 合并保留第二个表格的表头文字，作为普通数据行追加，**不去重、不丢弃任何一行**；保留内容、行内格式、链接及图片。采用文档中上方表格的列宽（自动宽度也优先）；标准 Markdown 保存后列对齐以首行表头为准。仅合并成功才删除中间空白段落，整次合并一次撤销 / 重做，撤销恢复两个表格、间隔、原列宽和光标；总计超过 10000 个单元格则拒绝。
+- **Merge with next table** vertically appends adjacent equal-column, top-level simple tables, allowing only unformatted whitespace paragraphs between them. The second header is kept as a data row, never discarded. Upper-table widths win; Markdown column alignment follows the surviving first header. Unsupported spans/nesting, real intervening content, and oversized results are rejected without changes; one Undo restores both tables and the gap.
+- **首次插入表格**也可在右侧格式面板指定 1–100 行（含首行表头），默认 3 行、固定沿用原来的 3 列；再点「插入表格」于当前编辑选区创建，一次撤销可移除。非法数量不会截断或创建表格。**Insert table** accepts 1–100 total rows including its header, defaults to 3 rows, and keeps 3 columns.
+- 表格中普通文本光标位于最后一行时，**Enter** 追加一行并跳到对应列；**Shift+Enter** 跳到表格下方的空段落；第一行（含表头）**Ctrl+Enter** 跳到表格上方的空段落，使表格下移。优先复用相邻空段落。其他行保持原快捷键；非空选区、输入法组词和只读模式不触发表格结构操作。
+- 编辑表格上方的 **↔ 1 / ↔ 2…** 可拖动各列宽度，其他列不变，表格总宽度随之变化；**↔ 表格 / Table** 等比调整全部列，**↺** 恢复自动宽度。Tab 可聚焦调整控件，左右方向键调整 10 px（Shift 为 50 px）。每列限定 50–1600 px；一次完整拖动一次撤销，Escape / 失焦取消。宽表格在阅读和编辑中均可横向滚动，不裁掉列。
+- 列宽使用 MdView 的受限 Markdown 扩展保存：表格前单独一段 `{table-widths=120,240}`，与后面的标准管道表格用空行分开。只接受与列数一致的整数像素列表，不接受 CSS / 任意 HTML；对齐标记仍保留。其他 Markdown 软件可能把该行显示为普通文字，删除该元数据段即可回到普通 GFM 表格。无尺寸修改的表格不新增此段；恢复自动宽度会移除尺寸段。
 - 「正文 / 标题」下拉框使用适配主题的浮层，支持方向键、Enter、Escape，保留正文选区。
 - 拖动图片主体可在当前文档中跨段落移动或调整同行图片顺序，松开到插入位置即可；保留图片地址、说明、标题和尺寸，不复制图片（Ctrl 拖动也移动）。每次移动独立撤销 / 重做；取消或拖到编辑区外不改变内容。尺寸按钮和边角手柄仍仅用于缩放。
 - 「设置 → 偏好设置」可开启网站图标，默认关闭。开启后自动向链接网站的 `/favicon.ico` 请求图标，不发送链接路径、查询参数或正文，不使用第三方图标服务。不支持或获取失败时保留普通文字链接；仅支持可解析到公网 IPv4、默认端口的网站及 PNG / PNG 内核 ICO 图标。
-- 文内锚点与 HTTP(S) 网页链接可点击，网页交给默认浏览器；其他本地 Markdown 请通过打开文件读取。
+- HTTP(S) 网页链接在**阅读模式普通单击**打开默认浏览器；**编辑模式 Ctrl+单击**打开，普通单击只放置光标。Tab 聚焦链接后，阅读按 Enter、编辑按 Ctrl+Enter；两种模式均可右键「在浏览器打开链接」，与表格操作 / 无格式复制菜单共存。编辑区悬停提示解释快捷键，不改动链接原文或源码，不自动打开粘贴的网址。
+- 仅接受显式 `http://` / `https://` 绝对地址，主进程和渲染层均解析校验；拒绝带用户名 / 密码（包括空凭据分隔符）、空白 / 控制字符、反斜杠混淆、`javascript:` / `data:` / `file:` / 应用自定义协议。原始目标交给默认浏览器，不在 MdView 中导航或创建窗口。文内锚点仍沿用阅读模式跳转；其他本地 Markdown 请通过打开文件读取。
+- **Web links:** ordinary click / focused-link Enter in reading mode; Ctrl+click / focused-link Ctrl+Enter in editing mode; or use **Open link in browser** in the context menu. Ordinary editing clicks and text selection do not launch links. Only validated absolute HTTP(S) URLs without credentials, raw whitespace/control characters or backslashes are accepted by both renderer and main process. Pasting never launches a URL; opening does not change the document.
 - 暂不含自动监视文件变化、公式、Mermaid、PDF 导出和自动更新。
 
 ## 实现与安全边界

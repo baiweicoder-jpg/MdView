@@ -8,6 +8,8 @@ app.disableHardwareAcceleration();
 app.on('browser-window-created', (_event, win) => { win.setOpacity(0); win.setSkipTaskbar(true); win.webContents.setBackgroundThrottling(false); });
 (async () => {
   const { win } = await require('../src/main.cjs');
+  // Disable throttling on the loaded renderer as well as the native window.
+  win.webContents.setBackgroundThrottling(false);
   const run = code => win.webContents.executeJavaScript(code, true);
   const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
   const wait = async code => { for(let i=0;i<200;i++) { if(await run(code)) return; await delay(30); } assert.fail(code); };

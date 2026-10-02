@@ -8,6 +8,8 @@ app.disableHardwareAcceleration();
 app.on('browser-window-created', (_event, win) => { win.setOpacity(0); win.setSkipTaskbar(true); win.webContents.setBackgroundThrottling(false); });
 (async () => {
   const { win } = await require('../src/main.cjs');
+  // Disable throttling on the loaded renderer as well as the native window.
+  win.webContents.setBackgroundThrottling(false);
   const run = code => win.webContents.executeJavaScript(code, true);
   const wait = async code => { for (let i = 0; i < 240; i++) { if (await run(code)) return; await new Promise(r => setTimeout(r, 25)); } assert.fail(code); };
   const key = (keyCode, modifiers = []) => { win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
