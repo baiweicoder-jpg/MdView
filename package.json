@@ -1,7 +1,7 @@
 {
   "name": "mdview",
   "productName": "MdView",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Windows Markdown reader with syntax highlighting and reading themes",
   "private": true,
   "main": "src/main.cjs",
@@ -13,7 +13,7 @@
     "test:desktop": "node scripts/launch.cjs --smoke-test",
     "test:mode-scroll": "npm run build && electron test/mode-scroll-electron.cjs",
     "test:theme": "electron test/review-theme-smoke.cjs && electron test/sky-theme-smoke.cjs",
-    "test:acceptance": "npm run test:desktop && electron test/mode-scroll-electron.cjs && node --test test/live-outline.test.cjs && electron test/image-group-smoke.cjs --integrated && electron test/table-controls-smoke.cjs && electron test/table-context-electron.cjs && electron test/external-links-electron.cjs && electron test/insert-table-electron.cjs && electron test/navigation-files-electron.cjs && electron test/sidebar-selection-electron.cjs && electron test/link-icons-electron.cjs && electron test/heading-numbering-electron.cjs && electron test/interaction-effects-smoke.cjs && electron test/code-controls-smoke.cjs && electron test/dialog-close-smoke.cjs && electron test/shared-select-smoke.cjs && electron test/unsaved-confirm-smoke.cjs && electron test/content-search-electron.cjs && electron test/search-drafts-selection.cjs && electron test/text-cleanup-electron.cjs && electron test/shortcuts-electron.cjs && electron test/markdown-paste-smoke.cjs && node --test test/zoom-controls.test.cjs && node --test test/tab-context.test.cjs && node --test test/open-picker.test.cjs && electron test/plaintext-copy-core-electron.cjs && electron test/list-copy-electron.cjs && npm run test:theme",
+    "test:acceptance": "npm run test:desktop && electron test/mode-scroll-electron.cjs && node --test test/live-outline.test.cjs && electron test/image-group-smoke.cjs --integrated && electron test/table-controls-smoke.cjs && electron test/table-overflow-electron.cjs && electron test/table-context-electron.cjs && electron test/external-links-electron.cjs && electron test/insert-table-electron.cjs && electron test/navigation-files-electron.cjs && electron test/sidebar-selection-electron.cjs && electron test/link-icons-electron.cjs && electron test/heading-numbering-electron.cjs && electron test/interaction-effects-smoke.cjs && electron test/code-controls-smoke.cjs && electron test/dialog-close-smoke.cjs && electron test/shared-select-smoke.cjs && electron test/unsaved-confirm-smoke.cjs && electron test/content-search-electron.cjs && electron test/search-drafts-selection.cjs && electron test/text-cleanup-electron.cjs && electron test/shortcuts-electron.cjs && electron test/markdown-paste-smoke.cjs && node --test test/zoom-controls.test.cjs && node --test test/tab-context.test.cjs && node --test test/open-picker.test.cjs && electron test/plaintext-copy-core-electron.cjs && electron test/list-copy-electron.cjs && npm run test:theme",
     "package": "node scripts/package.cjs",
     "build": "node scripts/build.cjs",
     "prestart": "npm run build",
