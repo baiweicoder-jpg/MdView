@@ -1,7 +1,7 @@
 import { CellSelection, cellAround, selectedRect, addRow, TableMap } from '@tiptap/pm/tables';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
-import { appendTableMergeActions } from './table-merge.js';
+
 
 function addStyledRow(tr, rect, index) {
   addRow(tr, rect, index);
@@ -201,7 +201,7 @@ export function installTableControls(editor) {
       });
       menu.append(button);
     }
-    appendTableMergeActions(menu, editor, $cell.pos + 1, close, text);
+
     doc.body.append(menu);
     // CSSOM positioning works with the app's strict style-src 'self' CSP.
     menu.style.left = `${Math.max(4, Math.min(event.clientX, win.innerWidth - menu.offsetWidth - 4))}px`;

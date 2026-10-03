@@ -1,6 +1,6 @@
-#menu-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 30px; flex: 0 0 30px; padding: 0 8px; background: var(--surface); color: var(--text); border-bottom: 1px solid var(--border); user-select: none; }
+#menu-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 30px; flex: 0 0 30px; padding: 0 8px; background: var(--surface); color: var(--text); border-bottom: 1px solid var(--border); user-select: none; }
 .menu-bar-menus, #quick-actions { display: flex; align-items: center; gap: 2px; min-width: 0; }
-#menu-bar button { height: 25px; min-width: 28px; padding: 1px 9px; border: 1px solid transparent; border-radius: 4px; background: transparent; font-size: 12px; line-height: 20px; white-space: nowrap; }
+#menu-bar button { height: 26px; min-width: 28px; padding: 2px 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; font-size: 12px; line-height: 20px; white-space: nowrap; }
 #quick-actions button { display: inline-flex; align-items: center; justify-content: center; width: 28px; padding: 3px; }
 #menu-bar button:hover, #menu-bar button[aria-expanded="true"], #menu-bar button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 #menu-bar button:focus-visible { outline-offset: -2px; }

@@ -41,7 +41,7 @@ const timer = setTimeout(() => { console.error('mode scroll timeout'); app.exit(
     const expected = !(await run('editing'));
     if (kind === 'button') await clickEdit();
     else if (kind === 'menu') { Menu.getApplicationMenu().getMenuItemById('edit-mode').click(); await settle(); }
-    else { win.focus(); await settle(); win.webContents.sendInputEvent({type:'keyDown',keyCode:'E',modifiers:['control']}); win.webContents.sendInputEvent({type:'keyUp',keyCode:'E',modifiers:['control']}); await settle(); }
+    else { win.focus(); win.webContents.focus(); await settle(); assert.equal(win.webContents.isFocused(),true,'native Ctrl+E requires the test renderer focused'); win.webContents.sendInputEvent({type:'keyDown',keyCode:'E',modifiers:['control']}); win.webContents.sendInputEvent({type:'keyUp',keyCode:'E',modifiers:['control']}); await settle(); }
     for (let n=0;n<40 && await run('editing')!==expected;n++) await settle();
     if (await run('editing') !== expected) console.log('KEY FAILURE', {windowFocused:win.isFocused(),webContentsFocused:win.webContents.isFocused()}, await run('({notice:$("#toast").textContent,sourceChanged:payload().source!==currentDocument.source,selection:richEditor.editor.state.selection.toJSON(),active:document.activeElement?.className})'));
     assert.equal(await run('editing'), expected, `${kind} toggles mode`);

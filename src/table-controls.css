@@ -1,17 +1,35 @@
 .table-row-count-label { display: flex; align-items: center; gap: 8px; padding: 4px 8px; }
 .table-row-count-label input { min-width: 0; width: 64px; padding: 4px; color: inherit; background: var(--surface, Canvas); border: 1px solid var(--border, GrayText); border-radius: 4px; }
-.mdview-table-scroll { max-width: 100%; overflow-x: auto; margin: 23px 0; }
+.mdview-table-scroll { max-width: 100%; overflow-x: auto; margin: 23px 0; box-sizing: border-box; }
+.mdview-table-scroll:has(.table-perimeter-canvas) { padding: 30px 28px 18px; }
+.table-perimeter-canvas { position: relative; }
 .markdown .mdview-table-scroll table, .mdview-table-scroll table { display: table; table-layout: fixed; border-collapse: collapse; margin: 0; }
 .mdview-table-scroll th, .mdview-table-scroll td { box-sizing: border-box; min-width: 50px; overflow-wrap: anywhere; }
-.table-width-controls { margin-bottom: 4px; color: var(--muted, CanvasText); font: 12px/1.4 system-ui, sans-serif; }
-/* Busy/read-only transitions must not collapse rows above the viewport. */
-.table-width-controls[hidden] { display: block !important; visibility: hidden; }
-.table-width-controls button { box-sizing: border-box; color: inherit; background: var(--surface, Canvas); border: 1px solid var(--border, GrayText); border-radius: 3px; padding: 2px 8px; touch-action: none; cursor: ew-resize; }
-.table-width-controls button:focus-visible { outline: 2px solid var(--accent, Highlight); outline-offset: -2px; }
-.table-width-controls button:hover, .table-resizing .table-width-controls { color: var(--accent, Highlight); }
-.table-column-widths { display: flex; margin-top: 3px; }
-.table-column-widths button { flex: 0 0 auto; border-right: 3px solid var(--accent, Highlight); height: 22px; min-width: 50px; }
-.table-resizing { cursor: ew-resize; user-select: none; }
+.table-width-controls { --table-blue: #3370ff; position: absolute; inset: 0 auto auto 0; z-index: 4; pointer-events: none; color: var(--muted, CanvasText); font: 12px/1.4 system-ui, sans-serif; opacity: 0; }
+.mdview-table-scroll:hover .table-width-controls, .mdview-table-scroll:focus-within .table-width-controls { opacity: 1; }
+.table-width-controls[hidden] { display: none !important; }
+.table-width-controls::before, .table-width-controls::after { content: ''; position: absolute; background: color-mix(in srgb, var(--muted, #889099) 12%, transparent); border-radius: 3px; }
+.table-width-controls::before { top: -20px; left: 0; width: 100%; height: 8px; }
+.table-width-controls::after { left: -20px; top: 0; height: 100%; width: 8px; }
+.table-width-controls button { position: absolute; box-sizing: border-box; pointer-events: auto; color: inherit; background: transparent; border: 0; padding: 0; touch-action: none; }
+.table-width-controls button:focus-visible { outline: 2px solid var(--table-blue); outline-offset: -2px; }
+.table-column-widths button { top: 0; width: 12px; transform: translateX(-50%); cursor: col-resize; }
+.table-column-widths button::after { content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px; background: transparent; }
+.table-column-widths button:hover::after, .table-column-widths button:focus-visible::after, .table-resizing .table-column-widths button:active::after { background: var(--table-blue); }
+.table-width-controls [data-resize-table] { top: calc(50% - 13px); margin-left: 7px; width: 16px; height: 26px; border: 1px solid var(--border, #c6cbd4); border-radius: 4px; background: var(--surface, Canvas); cursor: ew-resize; }
+.table-width-controls > button:nth-child(2) { right: 0; bottom: -18px; width: 24px; height: 16px; border-radius: 4px; cursor: pointer; }
+.table-width-controls > button:nth-child(2):hover { background: var(--hover, #3b82f626); }
+.table-insert-columns, .table-insert-rows { position: absolute; inset: 0; pointer-events: none; }
+.table-insert-columns button { top: -27px; width: 22px; height: 22px; transform: translateX(-50%); cursor: pointer; }
+.table-insert-rows button { left: -27px; width: 22px; height: 22px; transform: translateY(-50%); cursor: pointer; }
+.table-insert-columns button span, .table-insert-rows button span { display: grid; place-items: center; position: relative; z-index: 1; margin: 2px; width: 18px; height: 18px; border-radius: 50%; font: 18px/1 system-ui; color: transparent; background: transparent; }
+.table-insert-columns button span::after, .table-insert-rows button span::after { content: ''; width: 3px; height: 3px; border-radius: 50%; background: var(--muted, #889099); position: absolute; }
+.table-width-controls button:is(:hover,:focus-visible) span { background: var(--table-blue); color: white; }
+.table-width-controls button:is(:hover,:focus-visible) span::after { display: none; }
+.table-insert-columns button:is(:hover,:focus-visible)::before { content: ''; position: absolute; top: 27px; left: 10px; width: 2px; height: var(--table-height); background: var(--table-blue); pointer-events: none; }
+.table-insert-rows button:is(:hover,:focus-visible)::before { content: ''; position: absolute; left: 27px; top: 10px; height: 2px; width: var(--table-width); background: var(--table-blue); pointer-events: none; }
+.table-perimeter-tooltip { position: fixed; z-index: 2100; max-width: calc(100vw - 8px); box-sizing: border-box; padding: 4px 7px; border-radius: 4px; background: #242830; color: #fff; font: 11px/1.4 system-ui; pointer-events: none; }
+.table-resizing { cursor: col-resize; user-select: none; }
 .table-context-menu {
   position: fixed; z-index: 2000; box-sizing: border-box;
   width: 270px; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px); overflow: auto;

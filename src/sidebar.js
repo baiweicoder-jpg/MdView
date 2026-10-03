@@ -44,6 +44,8 @@
   const tools = element('div', 'opened-files-actions');
   const count = element('span', 'opened-files-count'); count.setAttribute('role', 'status');
   const hint = element('p', 'opened-files-selection-hint');
+  tools.setAttribute('role', 'group');
+  tools.append(count);
   const buttons = {};
   for (const action of ['all', 'clear', 'close', 'trash']) {
     const button = element('button', `opened-files-${action}`); button.type = 'button';
@@ -67,7 +69,7 @@
     finally { pending = false; renderFiles(); }
   });
   window.mdview.onBusy(() => renderFiles());
-  filesPanel.append(search, count, tools, hint, list, empty);
+  filesPanel.append(search, tools, hint, list, empty);
   sidebar.prepend(tablist, outlinePanel, filesPanel);
   let mode = 'outline';
   function select(next) {
@@ -80,28 +82,34 @@
   }
   function renderFiles() {
     const focused = document.activeElement?.closest('.sidebar-file-entry')?.dataset.id;
-    const checkboxFocused = document.activeElement?.classList.contains('sidebar-file-select');
     const query = search.value.trim().toLocaleLowerCase();
     const visible = tabs.filter(tab => !query || `${tab.path ? tab.name : t('未命名.md')}\n${tab.path || ''}`.toLocaleLowerCase().includes(query));
     visibleIds = visible.map(tab => tab.id);
     selection.scope(visibleIds);
     const selected = tabs.filter(tab => selection.has(tab.id));
-    count.textContent = text(`已选 ${selected.length} / ${visible.length}`, `${selected.length} selected / ${visible.length} shown`);
+    count.textContent = text(`已选 ${selected.length}`, `${selected.length} selected`);
+    tools.hidden = !selected.length;
+    tools.setAttribute('aria-label', text('批量操作', 'Batch actions'));
     const disabled = fileBusy || pending;
-    buttons.all.textContent = text('全选筛选结果', 'Select all shown'); buttons.all.disabled = disabled || !visible.length;
+    buttons.all.textContent = text('全选', 'All'); buttons.all.title = text('全选筛选结果', 'Select all shown'); buttons.all.disabled = disabled || !visible.length;
     buttons.clear.textContent = text('清除选择', 'Clear'); buttons.clear.disabled = disabled || !selected.length;
     buttons.close.textContent = text('关闭标签', 'Close tabs'); buttons.close.disabled = disabled || !selected.length;
     buttons.trash.textContent = text('删除文件…', 'Delete files…'); buttons.trash.disabled = disabled || !selected.length || selected.some(tab => !tab.path);
-    hint.textContent = selected.some(tab => !tab.path) ? text('未命名文档不能删除磁盘文件，请关闭标签。', 'Untitled documents have no disk file. Use Close tabs.') : text('勾选或 Ctrl 多选，Shift 连选；删除会移入回收站。', 'Checkbox/Ctrl to select; Shift for range. Delete moves files to Recycle Bin.');
-    buttons.trash.title = hint.textContent;
+    hint.hidden = !selected.some(tab => !tab.path);
+    hint.textContent = hint.hidden ? '' : text('未命名文档请使用关闭标签。', 'Use Close tabs for untitled documents.');
+    list.title = text('单击打开并清除选择；Ctrl 单击多选，Shift 连选。Ctrl+空格选择，Esc 清除。', 'Click to open and clear selection; Ctrl-click toggles, Shift selects a range. Ctrl+Space selects, Escape clears.');
+    buttons.trash.title = hint.textContent || text('删除会移入回收站', 'Delete moves files to Recycle Bin');
     const fragment = document.createDocumentFragment();
     for (const tab of visible) {
       const name = tab.path ? tab.name : t('未命名.md');
       const entry = element('div', null, 'sidebar-file-entry' + (selection.has(tab.id) ? ' selected' : '')); entry.dataset.id = String(tab.id);
-      const checkbox = element('input', null, 'sidebar-file-select'); checkbox.type = 'checkbox'; checkbox.checked = selection.has(tab.id); checkbox.disabled = disabled;
-      checkbox.setAttribute('aria-label', text(`选择 ${name}`, `Select ${name}`));
+      const mark = element('span', null, 'sidebar-file-mark');
+      mark.setAttribute('aria-hidden', 'true');
+      mark.textContent = selection.has(tab.id) ? '✓' : '';
       const row = element('button', null, 'sidebar-file' + (tab.active ? ' active' : '') + (tab.dirty ? ' dirty' : ''));
       row.type = 'button';
+      row.setAttribute('aria-pressed', String(selection.has(tab.id)));
+      row.setAttribute('aria-keyshortcuts', 'Control+Space Shift+ArrowDown Shift+ArrowUp Escape');
       row.dataset.id = String(tab.id);
       // tab-name also protects filenames/paths from the renderer chrome translator.
       row.classList.add('tab-name');
@@ -112,25 +120,43 @@
       const dirty = element('span', null, 'sidebar-file-dirty');
       dirty.textContent = tab.dirty ? '●' : '';
       dirty.setAttribute('aria-label', tab.dirty ? t('未保存的更改') : '');
-      row.append(label, dirty);
-      entry.append(checkbox, row);
+      row.append(mark, label, dirty);
+      entry.append(row);
       fragment.append(entry);
     }
     list.replaceChildren(fragment);
     empty.hidden = list.children.length > 0;
     empty.textContent = t(query ? '没有匹配的已打开文件' : '没有已打开的文件');
-    if (focused) [...list.children].find(row => row.dataset.id === focused)?.querySelector(checkboxFocused ? 'input' : 'button')?.focus({ preventScroll: true });
+    if (focused) [...list.children].find(row => row.dataset.id === focused)?.querySelector('button')?.focus({ preventScroll: true });
   }
   search.addEventListener('input', renderFiles);
   list.addEventListener('click', event => {
     const entry = event.target.closest('.sidebar-file-entry');
-    if (!entry || fileBusy || pending) return;
+    if (!entry || event.button !== 0 || fileBusy || pending) return;
     const tab = tabs.find(item => String(item.id) === entry.dataset.id);
     if (!tab) return;
-    if (event.target.matches('input') || event.ctrlKey || event.metaKey || event.shiftKey) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
       selection.toggle(tab.id, visibleIds, event.shiftKey); renderFiles(); return;
     }
+    // Plain click opens only, and safely exits batch mode even on the active file.
+    selection.navigate(tab.id); renderFiles();
     if (!tab.active) perform(() => switchToTab(tab.id));
+  });
+  list.addEventListener('keydown', event => {
+    const entry = event.target.closest('.sidebar-file-entry');
+    if (!entry || fileBusy || pending) return;
+    const index = visibleIds.findIndex(id => String(id) === entry.dataset.id);
+    if (event.key === 'Escape') {
+      event.preventDefault(); selection.clear(); renderFiles();
+    } else if (event.code === 'Space' && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+      event.preventDefault(); selection.toggle(visibleIds[index], visibleIds, event.shiftKey); renderFiles();
+    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? visibleIds.length - 1 : Math.max(0, Math.min(visibleIds.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+      selection.move(visibleIds[index], visibleIds[next], visibleIds, event.shiftKey);
+      if (event.shiftKey) renderFiles();
+      list.children[next]?.querySelector('button').focus();
+    }
   });
   const resizer = element('div', 'sidebar-resizer');
   resizer.tabIndex = 0;
@@ -145,7 +171,7 @@
     if (Number.isFinite(stored) && stored > 0) preferredWidth = Math.max(160, Math.min(520, stored));
   } catch { /* Private storage must not prevent mounting. */ }
   function bounds() {
-    const max = Math.max(80, Math.min(520, Math.floor(innerWidth * .45)));
+    const max = Math.max(80, Math.min(innerWidth < 600 ? 168 : 520, Math.floor(innerWidth * .45)));
     return { min: Math.min(160, max), max };
   }
   function resize(width, persist = false) {

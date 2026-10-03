@@ -83,7 +83,7 @@ app.on('browser-window-created',(_e,w)=>{w.setOpacity(0);w.setFocusable(false);w
    await click(tableSelector,edit?{modifiers:['control']}:{});
    assert.deepEqual(calls.slice(tableBefore),[target],'link inside table opens unchanged target');
    await click(tableSelector,{button:'right'});await wait('!!document.querySelector("[data-open-external-link]")');
-   if(edit)assert.equal(await run('!!document.querySelector(".table-context-menu [data-table-action=mergeBelow]")'),true,'link action extends structural table menu');
+   if(edit)assert.equal(await run('!!document.querySelector(".table-context-menu [data-table-action=selectRows]")'),true,'link action extends structural table menu');
    await click('[data-open-external-link]');assert.deepEqual(calls.slice(tableBefore),[target,target]);
    assert.equal(await run('payload().source'),tableSource,'table link actions leave source unchanged');
  }

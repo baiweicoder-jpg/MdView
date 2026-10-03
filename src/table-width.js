@@ -1,5 +1,6 @@
 import { Table, TableCell, TableHeader } from '@tiptap/extension-table';
 import { closeHistory } from '@tiptap/pm/history';
+import { createTablePerimeter } from './table-perimeter.js';
 import { parseWidths, MIN_COLUMN_WIDTH as MIN, MAX_COLUMN_WIDTH as MAX } from './table-width-syntax.cjs';
 
 function cellAttributes() {
@@ -59,27 +60,31 @@ export const WidthTable = Table.extend({
       controls.setAttribute('role','group'); controls.setAttribute('aria-label','表格宽度 / Table width');
       const overall = doc.createElement('button'); overall.type = 'button'; overall.dataset.resizeTable = '';
       overall.setAttribute('role','slider'); overall.setAttribute('aria-label','表格总宽度 / Total table width'); overall.setAttribute('aria-orientation','horizontal');
-      overall.textContent = '↔ 表格 / Table'; overall.title = '拖动调整整个表格宽度；方向键微调 / Drag table width; arrow keys adjust';
+      overall.textContent = '↔'; overall.title = '拖动调整整个表格宽度；方向键微调 / Drag table width; arrow keys adjust';
       const reset = doc.createElement('button'); reset.type = 'button'; reset.textContent = '↺'; reset.setAttribute('aria-label','自动宽度 / Automatic width');
+      reset.title = '恢复自动宽度 / Reset to automatic width';
       const columns = doc.createElement('div'); columns.className = 'table-column-widths';
       controls.append(overall,reset,columns);
       const table = doc.createElement('table'); table.className = 'mdview-width-table';
-      const colgroup = doc.createElement('colgroup'), contentDOM = doc.createElement('tbody'); table.append(colgroup,contentDOM); dom.append(controls,table);
+      const colgroup = doc.createElement('colgroup'), contentDOM = doc.createElement('tbody'); table.append(colgroup,contentDOM);
+      const canvas = doc.createElement('div'); canvas.className = 'table-perimeter-canvas'; canvas.append(controls,table); dom.append(canvas);
+      const perimeter = createTablePerimeter({ editor, getPos, controls, table, columns, overall, reset });
       function configured() { return widthsOf(node.toJSON()); }
       function currentWidths() {
-        return configured() || Array.from(contentDOM.querySelector('tr')?.children || [],cell => clamp(cell.getBoundingClientRect().width || 120));
+        const scale = table.getBoundingClientRect().width / table.offsetWidth || 1;
+        return configured() || Array.from(contentDOM.querySelector('tr')?.children || [],cell => clamp(cell.getBoundingClientRect().width / scale || 120));
       }
       function preview(widths) {
-        if (widths) table.style.width = `${widths.reduce((a,b)=>a+b,0)}px`;
-        else table.style.width = '100%';
+        canvas.style.width = widths ? `${widths.reduce((a,b)=>a+b,0)}px` : '';
+        table.style.width = '100%';
         for (let i=0; i<colgroup.children.length; i++) colgroup.children[i].style.width = widths ? `${widths[i]}px` : '';
         for (let i=0; i<columns.children.length; i++) {
-          const button = columns.children[i]; button.style.width = widths ? `${widths[i]}px` : `${100/columns.children.length}%`;
+          const button = columns.children[i];
           button.setAttribute('aria-valuenow', String(widths?.[i] || 120));
         }
         const total = widths?.reduce((a,b)=>a+b,0) || Math.round(table.getBoundingClientRect().width) || 120*columns.children.length;
         overall.setAttribute('aria-valuenow',String(total)); overall.setAttribute('aria-valuemin',String(MIN*columns.children.length)); overall.setAttribute('aria-valuemax',String(MAX*columns.children.length));
-        columns.style.width = widths ? `${widths.reduce((a,b)=>a+b,0)}px` : '100%';
+        perimeter.schedule();
       }
       function commit(widths) {
         const pos = getPos();
@@ -112,15 +117,17 @@ export const WidthTable = Table.extend({
         event.preventDefault(); event.stopPropagation();
         const widths = currentWidths(); if (!widths.length) return;
         handle.setPointerCapture(event.pointerId);
-        drag = { node,handle,id:event.pointerId,x:event.clientX,base:widths,widths,index:handle.hasAttribute('data-resize-column') ? Number(handle.dataset.resizeColumn) : null,moved:false };
+        drag = { node,handle,id:event.pointerId,x:event.clientX,scale:table.getBoundingClientRect().width/table.offsetWidth || 1,base:widths,widths,index:handle.hasAttribute('data-resize-column') ? Number(handle.dataset.resizeColumn) : null,moved:false };
         dom.classList.add('table-resizing'); win.addEventListener('blur',cancel); win.addEventListener('keydown',escape,true);
       });
-      controls.addEventListener('pointermove',event => {
+      function pointerMove(event) {
         if (!drag || drag.id!==event.pointerId) return;
-        event.preventDefault(); const delta=event.clientX-drag.x; if(!delta && !drag.moved) return;
+        event.preventDefault(); const delta=(event.clientX-drag.x)/drag.scale; if(!delta && !drag.moved) return;
         drag.moved=true; drag.widths=resized(drag.base,drag.index,delta); preview(drag.widths);
-      });
-      controls.addEventListener('pointerup',event => { if(drag?.id===event.pointerId) { event.preventDefault(); finish(true); } });
+      }
+      function pointerUp(event) { if(drag?.id===event.pointerId) { event.preventDefault(); finish(true); } }
+      win.addEventListener('pointermove', pointerMove);
+      win.addEventListener('pointerup', pointerUp);
       for(const name of ['pointercancel','lostpointercapture']) controls.addEventListener(name,event=>{if(drag?.id===event.pointerId)cancel();});
       controls.addEventListener('keydown',event => {
         const handle=event.target.closest('[data-resize-column],[data-resize-table]');
@@ -130,7 +137,7 @@ export const WidthTable = Table.extend({
       });
       controls.addEventListener('mousedown',event=>event.preventDefault());
       reset.addEventListener('click',()=>commit(null));
-      function syncEditable() { controls.hidden=!editor.isEditable; if(!editor.isEditable) cancel(); }
+      function syncEditable() { controls.hidden=!editor.isEditable; if(!editor.isEditable) cancel(); perimeter.schedule(); }
       function sync() {
         const count=node.firstChild.childCount;
         while(colgroup.children.length<count) colgroup.append(doc.createElement('col'));
@@ -138,7 +145,7 @@ export const WidthTable = Table.extend({
         if(columns.children.length!==count) {
           columns.replaceChildren();
           for(let i=0;i<count;i++) {
-            const button=doc.createElement('button'); button.type='button'; button.dataset.resizeColumn=String(i); button.textContent=`↔ ${i+1}`;
+            const button=doc.createElement('button'); button.type='button'; button.dataset.resizeColumn=String(i);
             button.setAttribute('role','slider'); button.setAttribute('aria-orientation','horizontal'); button.setAttribute('aria-valuemin',String(MIN)); button.setAttribute('aria-valuemax',String(MAX));
             button.setAttribute('aria-label',`调整第 ${i+1} 列宽 / Resize column ${i+1}`);
             button.title='拖动或方向键调整列宽 / Drag or arrow keys to resize column'; columns.append(button);
@@ -151,7 +158,7 @@ export const WidthTable = Table.extend({
         update(current) { if(current.type!==node.type)return false; if(drag && current!==node)cancel(); node=current; sync(); return true; },
         stopEvent:event=>controls.contains(event.target),
         ignoreMutation:mutation=>mutation.type!=='selection' && !contentDOM.contains(mutation.target),
-        destroy() { cancel(); editor.off('transaction',syncEditable); editor.off('update',syncEditable); },
+        destroy() { cancel(); perimeter.destroy(); win.removeEventListener('pointermove',pointerMove); win.removeEventListener('pointerup',pointerUp); editor.off('transaction',syncEditable); editor.off('update',syncEditable); },
       };
     };
   },

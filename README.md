@@ -115,12 +115,11 @@ Default off, persisted locally, and display-only in reader/editor/outline. Missi
 - 编辑器 `Ctrl+V` 自动识别 Markdown 源码：标题、围栏代码、连续列表项、管道表格、成对加粗 / 高亮、Markdown 链接及受限下划线 / 颜色语法。在当前光标或选区插入结构化内容，保留前后正文，一次撤销可恢复；不在每次输入时重解析全文。即使浏览器同时提供 HTML，明确的 Markdown 源码也优先按 Markdown 解析；普通富文本仍保留原有 HTML 粘贴行为，普通段落与独立网址不触发转换。
 - `Ctrl+Shift+V` 保留纯文本，不转换 Markdown；在代码块内粘贴始终保留源码（含 `@url:` 文本），不执行或请求其中的地址。图片粘贴优先级不变。Markdown 粘贴源码及插入后保存内容均限 10 MB（UTF-8）；超限保持原文并提示。解析沿用受限规则，原始 HTML / SVG 不执行，网络图片不加载。
 - 表格中右击单元格选择行 / 列，再 Shift 点击另一单元格可连续多选；右击高亮区域可批量删除，也可在当前位置上方 / 下方插入行、左侧 / 右侧插入列，支持撤销。右键菜单的「插入行数」接受 **1–100 的整数**，上 / 下方插入以当前行或行选区边界为准；整批一次撤销，超过 10000 个单元格则整体拒绝，不截断。首行始终是唯一表头。
-- 表格右键「**与下一个表格合并**」（或「合并上方表格」）按文档顺序纵向追加。仅支持列数相同的顶层简单表格，相邻或仅隔无格式空白段落；不跨正文、代码、列表或含链接 / 图片 / 换行节点的段落，不支持跨行 / 跨列 / 嵌套表格。无法合并时按钮禁用并显示原因，拒绝操作不修改文档。
-- 合并保留第二个表格的表头文字，作为普通数据行追加，**不去重、不丢弃任何一行**；保留内容、行内格式、链接及图片。采用文档中上方表格的列宽（自动宽度也优先）；标准 Markdown 保存后列对齐以首行表头为准。仅合并成功才删除中间空白段落，整次合并一次撤销 / 重做，撤销恢复两个表格、间隔、原列宽和光标；总计超过 10000 个单元格则拒绝。
-- **Merge with next table** vertically appends adjacent equal-column, top-level simple tables, allowing only unformatted whitespace paragraphs between them. The second header is kept as a data row, never discarded. Upper-table widths win; Markdown column alignment follows the surviving first header. Unsupported spans/nesting, real intervening content, and oversized results are rejected without changes; one Undo restores both tables and the gap.
+
+
 - **首次插入表格**也可在右侧格式面板指定 1–100 行（含首行表头），默认 3 行、固定沿用原来的 3 列；再点「插入表格」于当前编辑选区创建，一次撤销可移除。非法数量不会截断或创建表格。**Insert table** accepts 1–100 total rows including its header, defaults to 3 rows, and keeps 3 columns.
 - 表格中普通文本光标位于最后一行时，**Enter** 追加一行并跳到对应列；**Shift+Enter** 跳到表格下方的空段落；第一行（含表头）**Ctrl+Enter** 跳到表格上方的空段落，使表格下移。优先复用相邻空段落。其他行保持原快捷键；非空选区、输入法组词和只读模式不触发表格结构操作。
-- 编辑表格上方的 **↔ 1 / ↔ 2…** 可拖动各列宽度，其他列不变，表格总宽度随之变化；**↔ 表格 / Table** 等比调整全部列，**↺** 恢复自动宽度。Tab 可聚焦调整控件，左右方向键调整 10 px（Shift 为 50 px）。每列限定 50–1600 px；一次完整拖动一次撤销，Escape / 失焦取消。宽表格在阅读和编辑中均可横向滚动，不裁掉列。
+- 编辑表格悬停或键盘聚焦时显示顶部 / 左侧的浅色操作轨道；每个列 / 行边界的蓝色 `+` 分别插入列 / 行，并显示贯穿表格的蓝色预览线。直接拖动单元格列边界调整该列宽度，右边缘 `↔` 等比调整表格总宽，紧凑的 `↺` 恢复自动宽度。Tab 可聚焦控件，左右方向键调整 10 px（Shift 为 50 px）。每列限定 50–1600 px；一次拖动一次撤销，Escape / 失焦 / 指针取消取消修改。宽表格在阅读和编辑中均可横向滚动；不提供表格合并操作，不改写已有文档。
 - 列宽使用 MdView 的受限 Markdown 扩展保存：表格前单独一段 `{table-widths=120,240}`，与后面的标准管道表格用空行分开。只接受与列数一致的整数像素列表，不接受 CSS / 任意 HTML；对齐标记仍保留。其他 Markdown 软件可能把该行显示为普通文字，删除该元数据段即可回到普通 GFM 表格。无尺寸修改的表格不新增此段；恢复自动宽度会移除尺寸段。
 - 「正文 / 标题」下拉框使用适配主题的浮层，支持方向键、Enter、Escape，保留正文选区。
 - 拖动图片主体可在当前文档中跨段落移动或调整同行图片顺序，松开到插入位置即可；保留图片地址、说明、标题和尺寸，不复制图片（Ctrl 拖动也移动）。每次移动独立撤销 / 重做；取消或拖到编辑区外不改变内容。尺寸按钮和边角手柄仍仅用于缩放。

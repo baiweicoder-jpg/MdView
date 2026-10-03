@@ -70,7 +70,7 @@ if (process.argv.some(arg => /table-controls-smoke\.cjs$/.test(arg))) {
     let win;
     try {
       const root=path.resolve(__dirname,'..');
-      require('esbuild').buildSync({stdin:{contents:`import {create} from './src/rich-editor.js'; import {cellAround} from '@tiptap/pm/tables'; window.make=html=>{window.fixture=create(document.querySelector('#editor'),{source:'',editorHtml:html},()=>{});window.e=fixture.editor;}; window.selectCells=(r,c,r2,c2)=>{const pos=(r,c)=>cellAround(e.state.doc.resolve(e.view.posAtDOM(cell(r,c),0))).pos;e.commands.setCellSelection({anchorCell:pos(r,c),headCell:pos(r2,c2)});e.view.focus();};`,resolveDir:root},bundle:true,platform:'browser',outfile:path.join(scratch,'fixture.js')});
+      require('esbuild').buildSync({stdin:{contents:`import {create} from './src/rich-editor.js'; import {cellAround} from '@tiptap/pm/tables'; import {undoDepth,redoDepth} from '@tiptap/pm/history'; window.fixtureHistory=()=>({undo:undoDepth(e.state),redo:redoDepth(e.state)}); window.make=html=>{window.fixture=create(document.querySelector('#editor'),{source:'',editorHtml:html},()=>{});window.e=fixture.editor;}; window.selectCells=(r,c,r2,c2)=>{const pos=(r,c)=>cellAround(e.state.doc.resolve(e.view.posAtDOM(cell(r,c),0))).pos;e.commands.setCellSelection({anchorCell:pos(r,c),headCell:pos(r2,c2)});e.view.focus();};`,resolveDir:root},bundle:true,platform:'browser',outfile:path.join(scratch,'fixture.js')});
       const css=pathToFileURL(path.join(root,'src/table-controls.css')).href;
       const themeCss = ['style.css','review-theme.css','sky-theme.css'].map(name=>`<link rel="stylesheet" href="${pathToFileURL(path.join(root,'src',name)).href}">`).join('');
       const csp=fs.readFileSync(path.join(root,'src/index.html'),'utf8').match(/content="(default-src[^"]+)"/)[1];
@@ -82,7 +82,11 @@ if (process.argv.some(arg => /table-controls-smoke\.cjs$/.test(arg))) {
       await run(`window.original='<table><tr><th>A</th><th>B</th><th>C</th></tr><tr><td>a</td><td>b</td><td>c</td></tr><tr><td>d</td><td>e</td><td>f</td></tr><tr><td>g</td><td>h</td><td>i</td></tr></table>'; make(original);`);
       await new Promise(resolve=>setTimeout(resolve,50));
       await run(`window.tableViolations=[]; document.addEventListener('securitypolicyviolation',event=>tableViolations.push(event.violatedDirective));`);
+      assert.equal(await run('e.view.dom.querySelectorAll("[data-insert-column]").length'),4,'one insertion target at every column boundary');
+      assert.equal(await run('e.view.dom.querySelectorAll("[data-insert-row]").length'),5,'one insertion target at every row boundary');
       await checks(run);
+      await run('context(0,0)');
+      assert.equal(await run('document.querySelectorAll("[data-table-action^=merge]").length'),0,'no table merge actions');
       assert.deepEqual(await run('tableViolations'),[],'menu introduces no CSP violations');
       assert.equal(await run(`(()=>{context(1,0);action('selectRows');return getComputedStyle(e.view.dom.querySelector('.selectedCell'),'::after').backgroundColor !== 'rgba(0, 0, 0, 0)'})()`),true,'cell selection is visibly painted');
       await run('e.commands.setTextSelection(4)');
@@ -252,6 +256,7 @@ if (process.argv.some(arg => /table-controls-smoke\.cjs$/.test(arg))) {
       assert.equal(await run('e.view.dom.querySelectorAll("tr").length'),4,'IME Enter does not add row');
       await run('e.view.input.composing=false; e.setEditable(false)'); await enter([]);
       assert.equal(await run('e.view.dom.querySelectorAll("tr").length'),4,'read-only Enter does not add row');
+      await require('./table-perimeter-checks.cjs')({run,win,reset,scratch,fs,path});
       await reset(require('../src/markdown.cjs').renderEditorHtml('{table-widths=120,240}\n\n| A | B |\n| :--- | ---: |\n| a | b |'));
       assert.match(await run('e.getMarkdown()'), /\{table-widths=120,240\}/, 'widths serialize safely');
       assert.match(await run('e.getMarkdown()'), /:--/, 'column alignment survives');
@@ -262,10 +267,14 @@ if (process.argv.some(arg => /table-controls-smoke\.cjs$/.test(arg))) {
       await run('e.commands.undo()');
       const beforeResize = await run('e.getMarkdown()');
       const dragWidth = async (selector,dx,cancel=false) => {
+        await run('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
         const p = await run(`(()=>{const r=e.view.dom.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()`);
+
         win.webContents.sendInputEvent({type:'mouseMove',...p});
         win.webContents.sendInputEvent({type:'mouseDown',...p,button:'left',clickCount:1});
-        win.webContents.sendInputEvent({type:'mouseMove',x:p.x+dx,y:p.y,button:'left',buttons:['left']});
+        await new Promise(resolve=>setTimeout(resolve,30));
+        win.webContents.sendInputEvent({type:'mouseMove',x:p.x+dx,y:p.y,button:'left',modifiers:['leftButtonDown']});
+        await new Promise(resolve=>setTimeout(resolve,30));
         if(cancel) await key('Escape');
         win.webContents.sendInputEvent({type:'mouseUp',x:p.x+dx,y:p.y,button:'left',clickCount:1});
         await new Promise(resolve=>setTimeout(resolve,80));
@@ -273,6 +282,7 @@ if (process.argv.some(arg => /table-controls-smoke\.cjs$/.test(arg))) {
       await dragWidth('[data-resize-column="0"]',60,true);
       assert.equal(await run('e.getMarkdown()'),beforeResize,'Escape cancels native drag without source change');
       await dragWidth('[data-resize-column="0"]',60);
+
       assert.match(await run('e.getMarkdown()'),/\{table-widths=180,240\}/,'native pointer resizes column and total');
       await run('e.commands.undo()'); assert.equal(await run('e.getMarkdown()'),beforeResize,'drag is one undo');
       await run('e.commands.redo()');
@@ -289,7 +299,21 @@ if (process.argv.some(arg => /table-controls-smoke\.cjs$/.test(arg))) {
         const layout=await run(`(()=>{const edit=e.view.dom.querySelector('table'),read=reader.querySelector('table'),wrap=edit.closest('.mdview-table-scroll');return {edit:edit.getBoundingClientRect().width,read:read.getBoundingClientRect().width,overflow:wrap.scrollWidth>wrap.clientWidth,scroll:getComputedStyle(wrap).overflowX,handle:getComputedStyle(e.view.dom.querySelector('[data-resize-column]')).borderRightWidth}})()`);
         assert.ok(Math.abs(layout.edit-layout.read)<2,'read/edit width parity '+theme+JSON.stringify(layout));
         assert.ok(layout.edit>=560 && layout.overflow && layout.scroll==='auto','narrow overflow remains accessible '+theme);
-        assert.ok(parseFloat(layout.handle)>=2,'visible resize indicator '+theme);
+        assert.equal(await run('getComputedStyle(e.view.dom.querySelector("[data-resize-column]")).cursor'), 'col-resize', 'direct column boundary '+theme);
+        for (const state of ['hover', 'focus']) {
+          await run('document.activeElement.blur();e.view.dom.querySelector("[data-resize-column]").scrollIntoView({block:"nearest",inline:"center",behavior:"instant"});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+          const p=await run('(()=>{const r=e.view.dom.querySelector("[data-resize-column]").getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()');
+          win.webContents.sendInputEvent({type:'mouseMove',...(state==='hover'?p:{x:1,y:1})});
+          if(state==='focus') { await key('Tab'); await run('e.view.dom.querySelector("[data-resize-column]").focus()'); }
+          await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+          const visual=await run(`(()=>{const h=e.view.dom.querySelector('[data-resize-column]'),s=getComputedStyle(h,'::after');return {active:h.matches('${state==='hover'?':hover':':focus-visible'}'),width:parseFloat(s.width),height:parseFloat(s.height),color:s.backgroundColor,opacity:getComputedStyle(h.closest('.table-width-controls')).opacity}})()`);
+          assert.equal(visual.active,true,`${theme} ${state} actually active`);
+          assert.ok(visual.width>=2 && visual.height>0,`${theme} ${state} painted boundary thickness: ${JSON.stringify(visual)}`);
+          assert.notEqual(visual.color,'transparent',`${theme} ${state} boundary color`);
+          assert.ok(!visual.color.startsWith('rgba(') || parseFloat(visual.color.split(',').at(-1))>0,`${theme} ${state} boundary has positive alpha`);
+          assert.notEqual(visual.color,'rgba(0, 0, 0, 0)',`${theme} ${state} boundary is not transparent`);
+          assert.equal(visual.opacity,'1',`${theme} ${state} parent is visible`);
+        }
       }
       await run('reader.remove(); document.querySelector("#editor").style.width=""; e.view.dom.querySelector("[data-resize-column]").focus()');
       await key('Left');

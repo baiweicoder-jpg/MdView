@@ -1,0 +1,52 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const {app,clipboard}=require('electron');
+const dir=fs.mkdtempSync(path.join(process.env.TMPDIR || app.getPath('temp'),'mdview-context-'));
+app.setPath('userData',path.join(dir,'profile'));app.disableHardwareAcceleration();
+app.on('browser-window-created',(_e,w)=>{w.setOpacity(0);w.setFocusable(false);w.setIgnoreMouseEvents(true);w.setSkipTaskbar(true);w.webContents.setBackgroundThrottling(false);w.showInactive();});
+(async()=>{
+ const {win,editSession}=await require('../src/main.cjs');
+ // Disable throttling on the loaded renderer as well as the native window.
+ win.webContents.setBackgroundThrottling(false);
+ const run=code=>win.webContents.executeJavaScript(code,true);
+ const wait=async code=>{for(let i=0;i<200;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,20));}assert.fail(code);};
+ await wait('!!currentDocument && !restoringView');
+ const file=path.join(dir,'context.md');
+ const source='{table-widths=140,260}\n\n| Field | URL |\n| :--- | ---: |\n| upper | value |\n\n{table-widths=400,500}\n\n| **FIRST DATA** | [Target](https://example.invalid/a?x=%2F#part) |\n| --- | --- |\n| last | ![diagram](synthetic.png) |\n';
+ fs.writeFileSync(file,source);editSession.openDocument(await require('../src/markdown.cjs').readDocument(file));
+ await wait('currentDocument?.name==="context.md" && !restoringView');
+ if(!await run('editing'))await run('toggleEditing()');await wait('editing && !!richEditor && !restoringView');
+ await run(`window.e=richEditor.editor;window.tableCell=(t,r,c)=>e.view.dom.querySelectorAll('table')[t].querySelectorAll('tr')[r].children[c];window.contextCell=(t,r,c)=>tableCell(t,r,c).dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2,clientX:300,clientY:200}));window.tableAction=name=>document.querySelector('[data-table-action="'+name+'"]').click();void 0;`);
+ // Regression: an existing CellSelection must not redirect a different target's action.
+ await run(`contextCell(0,1,0);tableAction('selectRows');contextCell(1,1,0);tableAction('deleteRow');`);
+ assert.equal(await run('e.view.dom.querySelectorAll("table")[0].querySelectorAll("tr").length'),2,'cross-table context delete must not delete original selected row');
+ assert.equal(await run('e.view.dom.querySelectorAll("table")[1].querySelectorAll("tr").length'),1,'cross-table context delete targets clicked row');
+ await run('e.commands.undo();contextCell(0,0,0);tableAction("selectRows");contextCell(0,1,0);tableAction("deleteRow")');
+ assert.equal(await run('e.view.dom.querySelector("table").textContent.includes("Field")'),true,'same-table unselected row must not delete selected header');
+ assert.equal(await run('e.view.dom.querySelector("table").textContent.includes("upper")'),false);
+ await run('e.commands.undo();contextCell(0,1,0);tableAction("selectRows");window.selectionBefore=JSON.stringify(e.state.selection.toJSON());contextCell(0,1,1)');
+ await wait('!!document.querySelector("[data-plaintext-copy=plain]")');
+ await run('document.querySelector("[data-plaintext-copy=plain]").click()');await wait('!document.querySelector(".table-context-menu")');
+ assert.equal((await clipboard.readText()).replace(/\r\n/g,'\n'),'upper\tvalue');
+ assert.equal(await run('JSON.stringify(e.state.selection.toJSON())'),await run('selectionBefore'),'copy inside selected cells preserves selection');
+ // Text selections in table A also must not preserve the selection for B.
+ await run(`(()=>{let p;e.state.doc.descendants((n,pos)=>{if(n.isText&&n.text==='upper')p=pos;});e.commands.setTextSelection({from:p,to:p+5});e.view.focus();})();contextCell(1,1,0);tableAction('deleteRow');`);
+ assert.equal(await run('e.view.dom.querySelector("table").querySelectorAll("tr").length'),2,'text range outside context target is not preserved');
+ await run('e.commands.undo();contextCell(1,0,0)');
+ assert.equal(await run('document.querySelectorAll("[data-table-action^=merge]").length'),0,'merge actions removed rather than disabled');
+ console.log('TABLE CONTEXT PASS: cross/same-table target isolation, selected-cell copy, no merge actions');
+ await run('document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));void 0');
+ const point=await run(`(()=>{const b=e.view.dom.querySelector('[data-insert-column="1"]').getBoundingClientRect();return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)}})()`);
+ win.webContents.sendInputEvent({type:'mouseMove',...point});
+ win.webContents.sendInputEvent({type:'mouseDown',...point,button:'left',clickCount:1});
+ win.webContents.sendInputEvent({type:'mouseUp',...point,button:'left',clickCount:1});
+ await wait('e.view.dom.querySelector("tr").cells.length===3');
+ const persisted=await run('payload().source');
+ await run('saveDocument()');await wait('!fileBusy');
+ assert.equal(fs.readFileSync(file,'utf8'),persisted,'native perimeter insert persists through production save IPC');
+ assert.match(persisted,/table-widths/);assert.match(persisted,/FIRST DATA/);
+ const reopened=await require('../src/markdown.cjs').readDocument(file);
+ assert.equal((reopened.editorHtml.match(/<table\b/g)||[]).length,2,'saving never merges existing tables');
+ console.log('TABLE PERIMETER IPC SAVE PASS');
+ win.destroy();app.exit(0);
+})().catch(error=>{console.error(error);app.exit(1);});

@@ -37,14 +37,14 @@ app.on('browser-window-created',(_event,win)=>{win.hide();win.setSkipTaskbar(tru
  await run(`window.mdviewSearch.close();switchToTab(${ids[0]})`);await wait('!restoringView');
  await run('$("#sidebar-tab-files").click()');
  await run(`document.querySelector('.sidebar-file[data-id="${ids[1]}"]').dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true}));document.querySelector('.sidebar-file[data-id="${ids[3]}"]').dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey:true}))`);
- assert.equal(await run('document.querySelectorAll(".sidebar-file-select:checked").length'),3);
+ assert.equal(await run('document.querySelectorAll(".sidebar-file-entry.selected").length'),3);
  assert.equal(await run('currentDocument.id'),ids[0],'multiselect does not switch');
  await run('$("#opened-files-search").value="synthetic-2-";$("#opened-files-search").dispatchEvent(new Event("input"));$("#opened-files-all").click()');
- assert.equal(await run('document.querySelectorAll(".sidebar-file-select:checked").length'),1,'select all scope is visible filtered list');
+ assert.equal(await run('document.querySelectorAll(".sidebar-file-entry.selected").length'),1,'select all scope is visible filtered list');
  await run('$("#opened-files-search").value="";$("#opened-files-search").dispatchEvent(new Event("input"));$("#opened-files-clear").click()');
  await run(`switchToTab(${ids[0]})`);await wait('!restoringView');await run('toggleEditing()');await wait('editing && !restoringView');
  await run('richEditor.editor.commands.insertContentAt(1,"UNSAVED ")');const draft=await run('payload().source');
- await run(`document.querySelector('.sidebar-file-entry[data-id="${ids[0]}"] input').click();document.querySelector('.sidebar-file-entry[data-id="${ids[1]}"] input').click();$("#opened-files-trash").click()`);
+ await run(`document.querySelector('.sidebar-file[data-id="${ids[0]}"]').dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true}));document.querySelector('.sidebar-file[data-id="${ids[1]}"]').dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true}));$("#opened-files-trash").click()`);
  await wait('$("#unsaved-dialog").open');assert.equal(await run('$("#unsaved-dialog").dataset.kind'),'trash');
  assert.match(await run('$("#unsaved-name").textContent'),/synthetic-0/);assert.equal(await run('$("#unsaved-dialog [data-choice=save]").hidden'),true);
  await run('$("#unsaved-dialog [data-choice=cancel]").click()');await wait('!fileBusy');assert.equal(await run('payload().source'),draft);assert.ok(fs.existsSync(files[0]));
@@ -58,7 +58,7 @@ app.on('browser-window-created',(_event,win)=>{win.hide();win.setSkipTaskbar(tru
    assert.equal(await run(`tabs.some(t=>t.id===${ids[1]})`),true,'failed trash tab retained');
  } finally {shell.trashItem=originalTrash;}
  const previous=await run('currentDocument.id');await run('window.mdview.newDocument()');await wait(`currentDocument.id!==${previous} && !restoringView`);
- await run('$("#opened-files-clear").click();document.querySelector(`.sidebar-file-entry[data-id="${currentDocument.id}"] input`).click()');
+ await run('$("#opened-files-clear").click();document.querySelector(`.sidebar-file[data-id="${currentDocument.id}"]`).dispatchEvent(new MouseEvent("click",{bubbles:true,ctrlKey:true}))');
  assert.equal(await run('$("#opened-files-trash").disabled'),true,'untitled disk delete disabled');
  assert.equal(errors.length,0,errors.join('\n'));
  console.log('NAVIGATION FILES PASS: geometry/manual scroll, sidebar range/filter, cancel/trash partial failure, durable exclusion, untitled protection');
